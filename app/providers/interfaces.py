@@ -14,6 +14,25 @@ class RetrievedContext(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
+class LLMGenerationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_message: str
+    mode: str
+    hint_level: int = Field(ge=0, le=4)
+    refusal: bool = False
+    context: list[RetrievedContext] = Field(default_factory=list)
+
+
+class LLMGenerationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_text: str
+    guiding_question: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class CodeExecutionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -35,7 +54,7 @@ class CodeExecutionResult(BaseModel):
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    def generate(self, prompt: str, *, context: list[RetrievedContext] | None = None) -> dict[str, Any]:
+    def generate(self, request: LLMGenerationRequest) -> LLMGenerationResult:
         ...
 
 

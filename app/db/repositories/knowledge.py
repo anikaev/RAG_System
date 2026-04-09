@@ -26,6 +26,7 @@ class KnowledgeChunkRepository:
         task_id: str | None,
         content: str,
         metadata_json: dict[str, str],
+        embedding_json: list[float] | None = None,
     ) -> KnowledgeChunk:
         record = self.get_by_chunk_id(db, chunk_id)
         if record is None:
@@ -37,7 +38,7 @@ class KnowledgeChunkRepository:
                 task_id=task_id,
                 content=content,
                 metadata_json=metadata_json,
-                embedding_json=None,
+                embedding_json=embedding_json,
             )
             db.add(record)
         else:
@@ -47,5 +48,6 @@ class KnowledgeChunkRepository:
             record.task_id = task_id
             record.content = content
             record.metadata_json = metadata_json
+            record.embedding_json = embedding_json
         db.flush()
         return record

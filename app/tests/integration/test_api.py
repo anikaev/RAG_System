@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.db.models import KnowledgeChunk
 from app.db.repositories import ChatMessageRepository, ChatSessionRepository
 
 
@@ -38,6 +39,7 @@ def test_chat_endpoint_returns_contextual_hint(client):
     assert payload["data"]["mode"] == "concept_explainer"
     assert payload["data"]["used_context_ids"]
     assert payload["data"]["session_id"]
+    assert payload["data"]["confidence"] >= 0.5
 
 
 def test_chat_endpoint_refuses_full_solution_requests(client):
@@ -53,6 +55,7 @@ def test_chat_endpoint_refuses_full_solution_requests(client):
     payload = response.json()
     assert payload["data"]["mode"] == "refuse_full_solution"
     assert payload["data"]["refusal"] is True
+    assert "не выдаю готовое решение" in payload["data"]["response_text"].lower()
 
 
 def test_code_check_returns_syntax_feedback(client):
@@ -157,3 +160,14 @@ def test_code_check_keeps_session_history_in_database(db_client, db_manager):
         stored_messages = message_repository.list_for_session(db, session_id=session_id)
 
     assert len(stored_messages) == 2
+
+
+def test_seed_knowledge_chunks_include_mock_embeddings(db_client, db_manager):
+    db_client.get("/health")
+
+    with db_manager.session_scope() as db:
+        knowledge_chunks = list(db.query(KnowledgeChunk).order_by(KnowledgeChunk.chunk_id.asc()).all())
+
+    assert knowledge_chunks
+    assert knowledge_chunks[0].embedding_json is not None
+    assert len(knowledge_chunks[0].embedding_json) == 8

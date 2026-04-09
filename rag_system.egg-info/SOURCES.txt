@@ -27,8 +27,11 @@ app/db/repositories/chat.py
 app/db/repositories/knowledge.py
 app/kb/__init__.py
 app/providers/__init__.py
+app/providers/factory.py
 app/providers/fallback_retriever.py
 app/providers/interfaces.py
+app/providers/mock_embedding_provider.py
+app/providers/mock_llm_provider.py
 app/providers/stub_code_runner.py
 app/schemas/__init__.py
 app/schemas/chat.py
@@ -44,6 +47,8 @@ app/tests/conftest.py
 app/tests/integration/test_api.py
 app/tests/integration/test_migrations.py
 app/tests/unit/test_fallback_retriever.py
+app/tests/unit/test_mock_providers.py
+app/tests/unit/test_service_container.py
 cli/__init__.py
 cli/client.py
 rag_system.egg-info/PKG-INFO

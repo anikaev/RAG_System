@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "httpx>=0.28,<1.0",
+    "mypy>=1.14,<2.0",
     "pytest>=8.3,<9.0",
 ]
 
@@ -33,3 +34,18 @@ include = ["app*", "cli*"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["app/tests"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "cli"]
+exclude = '(^app/tests/|^app/db/migrations/)'
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+pretty = true
+show_error_codes = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true

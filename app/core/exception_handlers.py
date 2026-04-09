@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -49,8 +49,9 @@ def register_exception_handlers(application: FastAPI) -> None:
         request: Request,
         exc: HTTPException,
     ) -> JSONResponse:
-        detail = exc.detail if isinstance(exc.detail, dict | list) else None
-        message = exc.detail if isinstance(exc.detail, str) else "Request failed."
+        raw_detail = cast(Any, exc.detail)
+        detail = raw_detail if isinstance(raw_detail, (dict, list)) else None
+        message = raw_detail if isinstance(raw_detail, str) else "Request failed."
         return _json_error(
             request,
             status_code=exc.status_code,

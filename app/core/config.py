@@ -32,7 +32,10 @@ class Settings(BaseSettings):
     database_bootstrap_schema: bool = False
     database_echo: bool = False
     seed_demo_data_on_startup: bool = True
-    llm_provider_mode: str = "mock"
+    llm_provider_mode: Literal["mock"] = "mock"
+    embedding_provider_mode: Literal["mock"] = "mock"
+    retriever_backend_mode: Literal["fallback"] = "fallback"
+    code_execution_backend_mode: Literal["stub"] = "stub"
 
     runner_timeout_seconds: int = 2
     runner_cpu_limit: float = 0.5

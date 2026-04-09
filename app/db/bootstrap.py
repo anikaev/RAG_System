@@ -5,11 +5,17 @@ from pathlib import Path
 
 from app.db.repositories import KnowledgeChunkRepository
 from app.db.session import DatabaseSessionManager
+from app.providers.interfaces import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
 
-def seed_knowledge_chunks(db_manager: DatabaseSessionManager, seed_path: Path) -> int:
+def seed_knowledge_chunks(
+    db_manager: DatabaseSessionManager,
+    seed_path: Path,
+    *,
+    embedding_provider: EmbeddingProvider | None = None,
+) -> int:
     repository = KnowledgeChunkRepository()
     imported = 0
 
@@ -18,6 +24,9 @@ def seed_knowledge_chunks(db_manager: DatabaseSessionManager, seed_path: Path) -
             metadata, content = _parse_seed_document(path.read_text(encoding="utf-8"))
             if not content.strip():
                 continue
+            embedding = None
+            if embedding_provider is not None:
+                embedding = embedding_provider.embed([content.strip()])[0]
 
             repository.upsert(
                 db,
@@ -28,6 +37,7 @@ def seed_knowledge_chunks(db_manager: DatabaseSessionManager, seed_path: Path) -
                 task_id=metadata.get("task_id"),
                 content=content.strip(),
                 metadata_json=metadata,
+                embedding_json=embedding,
             )
             imported += 1
 

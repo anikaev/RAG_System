@@ -13,11 +13,12 @@ Requires-Dist: sqlalchemy<3.0,>=2.0
 Requires-Dist: uvicorn[standard]<1.0,>=0.30
 Provides-Extra: dev
 Requires-Dist: httpx<1.0,>=0.28; extra == "dev"
+Requires-Dist: mypy<2.0,>=1.14; extra == "dev"
 Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 
 # RAG-System
 
-Расширяемый прототип backend API для RAG-системы помощи при подготовке к ЕГЭ по информатике. На текущем проходе собран рабочий каркас FastAPI, строгие JSON-схемы, SQLAlchemy/Alembic persistence для сессий и истории, fallback retrieval по локальным seed-документам и безопасная статическая проверка Python-кода без исполнения в основном процессе.
+Расширяемый прототип backend API для RAG-системы помощи при подготовке к ЕГЭ по информатике. На текущем проходе собран рабочий каркас FastAPI, строгие JSON-схемы, SQLAlchemy/Alembic persistence для сессий и истории, слой provider abstractions с mock-реализациями, fallback retrieval по локальным seed-документам и безопасная статическая проверка Python-кода без исполнения в основном процессе.
 
 ## Что уже работает
 
@@ -29,6 +30,8 @@ Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 - централизованные JSON-ошибки
 - SQLAlchemy 2.x модели и Alembic migration для `ChatSession`, `ChatMessage`, `KnowledgeChunk`
 - хранение сессии, истории и `hint_level` в БД
+- provider abstractions: `LLMProvider`, `EmbeddingProvider`, `RetrieverBackend`, `CodeExecutionBackend`
+- `MockLLMProvider` и `MockEmbeddingProvider` для локального deterministic runtime
 - fallback retriever по `app/kb/seed`
 - seed демо knowledge chunks в БД при DB-режиме
 - базовые policy-ограничения на запросы полного решения
@@ -40,6 +43,7 @@ Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 
 - Redis пока не подключён к бизнес-логике.
 - Retrieval всё ещё работает через файловый fallback, а не через БД/pgvector backend.
+- mock LLM не использует внешний API и не генерирует ответы через реальную модель.
 - Docker sandbox runner ещё не выполняет код пользователя, endpoint `/v1/code/check` делает только статическую проверку и возвращает контролируемый статус `not_run`.
 - production execution backend и pgvector оставлены на следующие этапы.
 
@@ -52,7 +56,7 @@ uv run uvicorn app.main:app --reload
 
 API будет доступен на `http://127.0.0.1:8000`.
 
-По умолчанию локальный запуск может откатиться на in-memory session store, если PostgreSQL недоступен. Для принудительного DB-режима подними БД и примени миграции:
+По умолчанию локальный запуск использует in-memory session store. Для принудительного DB-режима подними БД и примени миграции:
 
 ```bash
 export RAG_SESSION_BACKEND=database
@@ -73,6 +77,14 @@ Compose сам применяет `alembic upgrade head` перед старто
 
 ```bash
 uv run pytest
+```
+
+Для GitHub Actions добавлен workflow в [.github/workflows/ci.yml](/Users/k.anikaev/PycharmProjects/RAG-System/.github/workflows/ci.yml): он на каждом `push` и `pull_request` устанавливает зависимости, запускает `pytest`, проверяет импорт FastAPI-приложения и валидирует `docker compose config`.
+
+Локальная статическая типизация:
+
+```bash
+uv run mypy
 ```
 
 ## Примеры запросов
@@ -134,6 +146,6 @@ docker/
 
 ## Следующие этапы
 
-1. Ввести отдельные provider abstractions и mock-реализации для LLM/embeddings/retriever backend.
-2. Перенести retrieval с файлового fallback на ingestion pipeline и knowledge chunks из БД.
+1. Реализовать ingestion pipeline с cleaners/chunking/metadata enrichment для `app/kb/seed`.
+2. Перенести retrieval с файлового fallback на knowledge chunks и подготовить pgvector backend.
 3. Заменить stub code backend на изолированный Docker runner с лимитами.
