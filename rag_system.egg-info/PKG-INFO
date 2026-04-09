@@ -1,0 +1,139 @@
+Metadata-Version: 2.4
+Name: rag-system
+Version: 0.1.0
+Summary: Extensible RAG API core for EGE informatics tutoring.
+Requires-Python: <3.13,>=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: alembic<2.0,>=1.14
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: pydantic<3.0,>=2.9
+Requires-Dist: pydantic-settings<3.0,>=2.5
+Requires-Dist: psycopg[binary]<4.0,>=3.2
+Requires-Dist: sqlalchemy<3.0,>=2.0
+Requires-Dist: uvicorn[standard]<1.0,>=0.30
+Provides-Extra: dev
+Requires-Dist: httpx<1.0,>=0.28; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
+
+# RAG-System
+
+Расширяемый прототип backend API для RAG-системы помощи при подготовке к ЕГЭ по информатике. На текущем проходе собран рабочий каркас FastAPI, строгие JSON-схемы, SQLAlchemy/Alembic persistence для сессий и истории, fallback retrieval по локальным seed-документам и безопасная статическая проверка Python-кода без исполнения в основном процессе.
+
+## Что уже работает
+
+- `GET /health`
+- `GET /openapi.json`
+- `POST /v1/chat/respond`
+- `POST /v1/code/check`
+- единый response envelope с `request_id`
+- централизованные JSON-ошибки
+- SQLAlchemy 2.x модели и Alembic migration для `ChatSession`, `ChatMessage`, `KnowledgeChunk`
+- хранение сессии, истории и `hint_level` в БД
+- fallback retriever по `app/kb/seed`
+- seed демо knowledge chunks в БД при DB-режиме
+- базовые policy-ограничения на запросы полного решения
+- безопасная статическая проверка Python-кода с блокировкой опасных паттернов
+- `docker compose up`
+- CLI-демо клиент
+
+## Ограничения текущего прохода
+
+- Redis пока не подключён к бизнес-логике.
+- Retrieval всё ещё работает через файловый fallback, а не через БД/pgvector backend.
+- Docker sandbox runner ещё не выполняет код пользователя, endpoint `/v1/code/check` делает только статическую проверку и возвращает контролируемый статус `not_run`.
+- production execution backend и pgvector оставлены на следующие этапы.
+
+## Локальный запуск
+
+```bash
+uv sync --native-tls --extra dev
+uv run uvicorn app.main:app --reload
+```
+
+API будет доступен на `http://127.0.0.1:8000`.
+
+По умолчанию локальный запуск может откатиться на in-memory session store, если PostgreSQL недоступен. Для принудительного DB-режима подними БД и примени миграции:
+
+```bash
+export RAG_SESSION_BACKEND=database
+export RAG_POSTGRES_URL=postgresql+psycopg://rag:rag@localhost:5432/rag
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
+```
+
+## Запуск через Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Compose сам применяет `alembic upgrade head` перед стартом API. Сервис будет доступен на `http://localhost:8000`.
+
+## Тесты
+
+```bash
+uv run pytest
+```
+
+## Примеры запросов
+
+### Health
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+### Chat
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/chat/respond \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "demo-user",
+    "message": "Объясни, как использовать цикл for в Python"
+  }'
+```
+
+### Code check
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/code/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "demo-user",
+    "language": "python",
+    "code": "for i in range(3):\n    print(i)"
+  }'
+```
+
+## CLI-клиент
+
+После `uv sync --extra dev` доступны команды:
+
+```bash
+uv run rag-cli health
+uv run rag-cli chat "Объясни массивы в задаче 27"
+uv run rag-cli code-check --code "print(1)"
+```
+
+## Структура
+
+```text
+app/
+  api/
+  core/
+  providers/
+  schemas/
+  services/
+  db/
+  kb/seed/
+  tests/
+cli/
+docker/
+```
+
+## Следующие этапы
+
+1. Ввести отдельные provider abstractions и mock-реализации для LLM/embeddings/retriever backend.
+2. Перенести retrieval с файлового fallback на ingestion pipeline и knowledge chunks из БД.
+3. Заменить stub code backend на изолированный Docker runner с лимитами.

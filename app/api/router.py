@@ -1,0 +1,10 @@
+from fastapi import APIRouter
+
+from app.api.routes_chat import router as chat_router
+from app.api.routes_code import router as code_router
+from app.api.routes_health import router as health_router
+
+api_router = APIRouter()
+api_router.include_router(health_router)
+api_router.include_router(chat_router)
+api_router.include_router(code_router)
