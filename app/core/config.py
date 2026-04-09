@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     seed_demo_data_on_startup: bool = True
     llm_provider_mode: Literal["mock"] = "mock"
     embedding_provider_mode: Literal["mock"] = "mock"
-    retriever_backend_mode: Literal["fallback"] = "fallback"
+    retriever_backend_mode: Literal["fallback", "pgvector"] = "fallback"
+    retriever_fallback_to_lexical: bool = True
     code_execution_backend_mode: Literal["stub"] = "stub"
 
     runner_timeout_seconds: int = 2
@@ -46,6 +47,7 @@ class Settings(BaseSettings):
     kb_seed_path: Path = Field(default=PROJECT_ROOT / "app" / "kb" / "seed")
     kb_chunk_size_chars: int = 320
     kb_chunk_overlap_paragraphs: int = 1
+    pgvector_dimensions: int = 8
 
     blocked_code_patterns: tuple[str, ...] = (
         "import os",

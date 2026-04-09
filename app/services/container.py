@@ -36,7 +36,11 @@ def build_service_container(settings: Settings) -> ServiceContainer:
     embedding_provider = build_embedding_provider(settings)
     session_store, db_manager = _build_session_store(settings, embedding_provider)
     llm_provider = build_llm_provider(settings)
-    retriever = build_retriever_backend(settings)
+    retriever = build_retriever_backend(
+        settings,
+        embedding_provider=embedding_provider,
+        db_manager=db_manager,
+    )
     code_backend = build_code_execution_backend(settings)
 
     return ServiceContainer(

@@ -19,6 +19,7 @@ from app.providers.interfaces import (
 )
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
+from app.providers.pgvector_retriever import PgvectorBackendUnavailable, PgvectorRetrieverBackend
 
 __all__ = [
     "CodeExecutionBackend",
@@ -30,6 +31,8 @@ __all__ = [
     "LLMProvider",
     "MockEmbeddingProvider",
     "MockLLMProvider",
+    "PgvectorBackendUnavailable",
+    "PgvectorRetrieverBackend",
     "RetrievedContext",
     "RetrieverBackend",
     "build_code_execution_backend",

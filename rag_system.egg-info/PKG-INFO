@@ -6,6 +6,7 @@ Requires-Python: <3.13,>=3.12
 Description-Content-Type: text/markdown
 Requires-Dist: alembic<2.0,>=1.14
 Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: pgvector<1.0,>=0.3
 Requires-Dist: pydantic<3.0,>=2.9
 Requires-Dist: pydantic-settings<3.0,>=2.5
 Requires-Dist: psycopg[binary]<4.0,>=3.2
@@ -45,7 +46,8 @@ Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 - Retrieval всё ещё работает через файловый fallback, а не через БД/pgvector backend.
 - mock LLM не использует внешний API и не генерирует ответы через реальную модель.
 - Docker sandbox runner ещё не выполняет код пользователя, endpoint `/v1/code/check` делает только статическую проверку и возвращает контролируемый статус `not_run`.
-- production execution backend и pgvector оставлены на следующие этапы.
+- production execution backend оставлен на следующие этапы.
+- `pgvector` backend уже заскэфолден, но по умолчанию выключен и откатывается на lexical fallback, если PostgreSQL/extension/column ещё не готовы.
 
 ## Локальный запуск
 
@@ -79,7 +81,7 @@ Compose сам применяет `alembic upgrade head` перед старто
 uv run pytest
 ```
 
-Для GitHub Actions добавлен workflow в [.github/workflows/ci.yml](/Users/k.anikaev/PycharmProjects/RAG-System/.github/workflows/ci.yml): он на каждом `push` и `pull_request` устанавливает зависимости, запускает `pytest`, проверяет импорт FastAPI-приложения и валидирует `docker compose config`.
+Для GitHub Actions добавлен workflow в [.github/workflows/ci.yml](/Users/k.anikaev/PycharmProjects/RAG-System/.github/workflows/ci.yml): он на каждом `push` и `pull_request` устанавливает зависимости, запускает `pytest`, `mypy` и проверяет импорт FastAPI-приложения.
 
 Локальная статическая типизация:
 
@@ -126,7 +128,62 @@ curl -X POST http://127.0.0.1:8000/v1/code/check \
 uv run rag-cli health
 uv run rag-cli chat "Объясни массивы в задаче 27"
 uv run rag-cli code-check --code "print(1)"
+uv run rag-cli ingest-kb --dry-run
 ```
+
+Для импорта knowledge chunks в БД:
+
+```bash
+uv run rag-cli ingest-kb \
+  --database-url postgresql+psycopg://rag:rag@localhost:5432/rag \
+  --bootstrap-schema
+```
+
+## Обновление KB
+
+Seed-документы лежат в [app/kb/seed](/Users/k.anikaev/PycharmProjects/RAG-System/app/kb/seed). Формат файла:
+
+```text
+subject: informatics
+topic: some_topic
+task_id: some-task
+
+Основной текст документа...
+```
+
+Pipeline:
+
+1. loader читает `.md` и отделяет metadata от тела документа
+2. cleaner нормализует пробелы и пустые строки
+3. chunker режет документ на chunks по абзацам
+4. ingest-команда строит chunks и при необходимости импортирует их в БД
+
+Быстрая проверка результата без БД:
+
+```bash
+uv run rag-cli ingest-kb --dry-run
+```
+
+## pgvector later
+
+В проекте уже есть scaffold для `pgvector` retriever backend:
+
+- dependency подключена в [pyproject.toml](/Users/k.anikaev/PycharmProjects/RAG-System/pyproject.toml)
+- backend лежит в [app/providers/pgvector_retriever.py](/Users/k.anikaev/PycharmProjects/RAG-System/app/providers/pgvector_retriever.py)
+- PostgreSQL-only migration добавляет `knowledge_chunks.embedding_vector` в [app/db/migrations/versions/20260410_0002_pgvector_scaffold.py](/Users/k.anikaev/PycharmProjects/RAG-System/app/db/migrations/versions/20260410_0002_pgvector_scaffold.py)
+
+Чтобы включить later:
+
+```bash
+export RAG_SESSION_BACKEND=database
+export RAG_RETRIEVER_BACKEND_MODE=pgvector
+export RAG_RETRIEVER_FALLBACK_TO_LEXICAL=true
+uv run alembic upgrade head
+uv run rag-cli ingest-kb \
+  --database-url postgresql+psycopg://rag:rag@localhost:5432/rag
+```
+
+Если `vector` extension или колонка ещё не готовы, сервис останется работоспособным и уйдёт в fallback retriever.
 
 ## Структура
 
@@ -146,6 +203,6 @@ docker/
 
 ## Следующие этапы
 
-1. Реализовать ingestion pipeline с cleaners/chunking/metadata enrichment для `app/kb/seed`.
-2. Перенести retrieval с файлового fallback на knowledge chunks и подготовить pgvector backend.
+1. Вынести hint progression в отдельный `HintService` и собрать полноценный `DialogueOrchestrator`.
+2. Перенести retrieval с файлового fallback на DB-backed chunks как primary path.
 3. Заменить stub code backend на изолированный Docker runner с лимитами.
