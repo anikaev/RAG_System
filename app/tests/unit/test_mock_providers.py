@@ -43,3 +43,27 @@ def test_mock_llm_provider_returns_structured_response():
     assert response.guiding_question
     assert 0.0 <= response.confidence <= 1.0
     assert response.metadata["provider"] == "mock"
+
+
+def test_mock_llm_provider_renders_response_template():
+    provider = MockLLMProvider()
+
+    response = provider.generate(
+        LLMGenerationRequest(
+            user_message="Помоги с задачей",
+            mode="hint_only",
+            hint_level=1,
+            response_template="Шаблонная подсказка: {hint}",
+            context=[
+                RetrievedContext(
+                    chunk_id="arrays:0",
+                    content="Сначала выдели ключевое состояние алгоритма и проверь его на примере.",
+                    score=1.0,
+                    metadata={"topic": "task_27"},
+                )
+            ],
+        )
+    )
+
+    assert response.response_text.startswith("Шаблонная подсказка:")
+    assert response.metadata["template_used"] is True

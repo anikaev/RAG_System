@@ -22,6 +22,8 @@ class LLMGenerationRequest(BaseModel):
     hint_level: int = Field(ge=0, le=4)
     refusal: bool = False
     context: list[RetrievedContext] = Field(default_factory=list)
+    hint_level_description: str | None = None
+    response_template: str | None = None
 
 
 class LLMGenerationResult(BaseModel):

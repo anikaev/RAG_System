@@ -15,6 +15,7 @@ from app.providers.factory import (
 from app.providers.interfaces import CodeExecutionBackend, EmbeddingProvider, LLMProvider, RetrieverBackend
 from app.services.chat_service import ChatService
 from app.services.code_service import CodeService
+from app.services.hint_service import HintService
 from app.services.session_store import DatabaseSessionStore, InMemorySessionStore, SessionStore
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class ServiceContainer:
     embedding_provider: EmbeddingProvider
     retriever: RetrieverBackend
     code_execution_backend: CodeExecutionBackend
+    hint_service: HintService
     chat_service: ChatService
     code_service: CodeService
     db_manager: DatabaseSessionManager | None = None
@@ -43,16 +45,20 @@ def build_service_container(settings: Settings) -> ServiceContainer:
     )
     code_backend = build_code_execution_backend(settings)
 
+    hint_service = HintService()
+
     return ServiceContainer(
         session_store=session_store,
         llm_provider=llm_provider,
         embedding_provider=embedding_provider,
         retriever=retriever,
         code_execution_backend=code_backend,
+        hint_service=hint_service,
         chat_service=ChatService(
             session_store=session_store,
             llm_provider=llm_provider,
             retriever=retriever,
+            hint_service=hint_service,
         ),
         code_service=CodeService(
             settings=settings,

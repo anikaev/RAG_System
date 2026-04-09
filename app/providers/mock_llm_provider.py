@@ -8,6 +8,44 @@ class MockLLMProvider(LLMProvider):
     def generate(self, request: LLMGenerationRequest) -> LLMGenerationResult:
         excerpt = self._build_excerpt(request)
 
+        if request.response_template:
+            return self._from_template(request, excerpt)
+
+        return self._legacy_generate(request, excerpt)
+
+    def _from_template(
+        self, request: LLMGenerationRequest, excerpt: str,
+    ) -> LLMGenerationResult:
+        template = request.response_template
+        if template is None:
+            return self._legacy_generate(request, excerpt)
+
+        fill = {
+            "hint": excerpt,
+            "reason": "не хватает условия задачи или текущего шага",
+            "requested_context": "условие задачи, номер задания или свой текущий код",
+            "concept_summary": excerpt,
+            "code_feedback": excerpt,
+            "refusal_reason": "Это не поможет тебе в обучении.",
+        }
+        response_text = template.format_map(_SafeFormatMap(fill))
+
+        confidence = self._pick_confidence(request)
+
+        return LLMGenerationResult(
+            response_text=response_text,
+            guiding_question=None,
+            confidence=confidence,
+            metadata={
+                "provider": "mock",
+                "mode": request.mode,
+                "template_used": True,
+            },
+        )
+
+    def _legacy_generate(
+        self, request: LLMGenerationRequest, excerpt: str,
+    ) -> LLMGenerationResult:
         if request.mode == "refuse_full_solution":
             return LLMGenerationResult(
                 response_text=(
@@ -62,6 +100,17 @@ class MockLLMProvider(LLMProvider):
             metadata={"provider": "mock", "mode": request.mode},
         )
 
+    def _pick_confidence(self, request: LLMGenerationRequest) -> float:
+        if request.mode == "refuse_full_solution":
+            return 0.96
+        if request.mode == "clarify":
+            return 0.42
+        if request.mode in ("concept_explainer", "hint_only"):
+            return 0.84 if request.context else 0.58
+        if request.mode == "code_feedback":
+            return 0.73
+        return 0.55
+
     @staticmethod
     def _build_excerpt(request: LLMGenerationRequest) -> str:
         if not request.context:
@@ -70,3 +119,10 @@ class MockLLMProvider(LLMProvider):
                 "на минимальном примере."
             )
         return sanitize_excerpt(request.context[0].content)
+
+
+class _SafeFormatMap(dict):
+    """Returns the key wrapped in braces for any missing placeholder."""
+
+    def __missing__(self, key: str) -> str:
+        return f"{{{key}}}"
