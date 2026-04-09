@@ -24,7 +24,11 @@ def build_embedding_provider(settings: Settings) -> EmbeddingProvider:
 
 def build_retriever_backend(settings: Settings) -> RetrieverBackend:
     if settings.retriever_backend_mode == "fallback":
-        return FallbackRetriever(settings.kb_seed_path)
+        return FallbackRetriever(
+            settings.kb_seed_path,
+            chunk_size_chars=settings.kb_chunk_size_chars,
+            overlap_paragraphs=settings.kb_chunk_overlap_paragraphs,
+        )
     raise ValueError(
         f"Unsupported retriever_backend_mode: {settings.retriever_backend_mode}"
     )

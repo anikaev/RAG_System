@@ -76,6 +76,8 @@ def _build_session_store(
                 db_manager,
                 settings.kb_seed_path,
                 embedding_provider=embedding_provider,
+                chunk_size_chars=settings.kb_chunk_size_chars,
+                overlap_paragraphs=settings.kb_chunk_overlap_paragraphs,
             )
         return DatabaseSessionStore(db_manager), db_manager
     except Exception as exc:

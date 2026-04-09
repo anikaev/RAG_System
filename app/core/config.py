@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     max_chat_message_length: int = 4000
     max_code_length: int = 12000
     kb_seed_path: Path = Field(default=PROJECT_ROOT / "app" / "kb" / "seed")
+    kb_chunk_size_chars: int = 320
+    kb_chunk_overlap_paragraphs: int = 1
 
     blocked_code_patterns: tuple[str, ...] = (
         "import os",
