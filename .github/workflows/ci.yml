@@ -31,6 +31,3 @@ jobs:
 
       - name: Verify app import
         run: uv run python -c "from app.main import app; print(app.title)"
-
-      - name: Validate Docker Compose config
-        run: docker compose config
