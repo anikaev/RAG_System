@@ -32,11 +32,14 @@ class Settings(BaseSettings):
     database_bootstrap_schema: bool = False
     database_echo: bool = False
     seed_demo_data_on_startup: bool = True
-    llm_provider_mode: Literal["mock"] = "mock"
+    llm_provider_mode: Literal["mock", "openai"] = "mock"
     embedding_provider_mode: Literal["mock"] = "mock"
     retriever_backend_mode: Literal["fallback", "pgvector"] = "fallback"
     retriever_fallback_to_lexical: bool = True
     code_execution_backend_mode: Literal["stub"] = "stub"
+    openai_api_key: str | None = None
+    openai_base_url: str | None = None
+    openai_model: str = "gpt-5"
 
     runner_timeout_seconds: int = 2
     runner_cpu_limit: float = 0.5

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from app.providers.interfaces import LLMProvider, RetrieverBackend
+from app.providers.interfaces import RetrieverBackend
 from app.schemas.chat import ChatRequest, ChatResponseData
 from app.services.dialogue_orchestrator import DialogueOrchestrator
 from app.services.hint_service import HintService
+from app.services.llm_service import LLMService
 from app.services.session_store import SessionStore
 
 
@@ -17,13 +18,13 @@ class ChatService:
         self,
         *,
         session_store: SessionStore,
-        llm_provider: LLMProvider,
+        llm_service: LLMService,
         retriever: RetrieverBackend,
         hint_service: HintService,
     ) -> None:
         self._orchestrator = DialogueOrchestrator(
             session_store=session_store,
-            llm_provider=llm_provider,
+            llm_service=llm_service,
             retriever=retriever,
             hint_service=hint_service,
         )

@@ -54,6 +54,10 @@ def test_mock_llm_provider_renders_response_template():
             mode="hint_only",
             hint_level=1,
             response_template="Шаблонная подсказка: {hint}",
+            response_template_variables={"hint": "сначала выдели инвариант"},
+            guiding_question_hint="С чего ты начнешь проверку?",
+            confidence_hint=0.61,
+            pedagogical_instruction="Дай мягкую подсказку без готового решения.",
             context=[
                 RetrievedContext(
                     chunk_id="arrays:0",
@@ -66,4 +70,10 @@ def test_mock_llm_provider_renders_response_template():
     )
 
     assert response.response_text.startswith("Шаблонная подсказка:")
+    assert "сначала выдели инвариант" in response.response_text.lower()
+    assert response.guiding_question == "С чего ты начнешь проверку?"
+    assert response.confidence == 0.61
     assert response.metadata["template_used"] is True
+    assert response.metadata["pedagogical_instruction"] == (
+        "Дай мягкую подсказку без готового решения."
+    )

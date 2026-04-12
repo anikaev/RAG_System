@@ -28,18 +28,20 @@ class MockLLMProvider(LLMProvider):
             "code_feedback": excerpt,
             "refusal_reason": "Это не поможет тебе в обучении.",
         }
+        fill.update(request.response_template_variables)
         response_text = template.format_map(_SafeFormatMap(fill))
 
-        confidence = self._pick_confidence(request)
+        confidence = request.confidence_hint if request.confidence_hint is not None else self._pick_confidence(request)
 
         return LLMGenerationResult(
             response_text=response_text,
-            guiding_question=None,
+            guiding_question=request.guiding_question_hint,
             confidence=confidence,
             metadata={
                 "provider": "mock",
                 "mode": request.mode,
                 "template_used": True,
+                "pedagogical_instruction": request.pedagogical_instruction,
             },
         )
 
@@ -52,9 +54,16 @@ class MockLLMProvider(LLMProvider):
                     "Я не выдаю готовое решение целиком. Вместо этого помогу по шагам: "
                     f"{excerpt}"
                 ),
-                guiding_question="Какой промежуточный шаг у тебя уже получился?",
-                confidence=0.96,
-                metadata={"provider": "mock", "mode": request.mode},
+                guiding_question=(
+                    request.guiding_question_hint
+                    or "Какой промежуточный шаг у тебя уже получился?"
+                ),
+                confidence=self._resolve_confidence(request, 0.96),
+                metadata={
+                    "provider": "mock",
+                    "mode": request.mode,
+                    "pedagogical_instruction": request.pedagogical_instruction,
+                },
             )
 
         if request.mode == "clarify":
@@ -63,9 +72,16 @@ class MockLLMProvider(LLMProvider):
                     "Нужно чуть больше контекста, чтобы подсказка была точной. "
                     f"{excerpt}"
                 ),
-                guiding_question="Пришли условие задачи, номер задания или свой текущий код.",
-                confidence=0.42,
-                metadata={"provider": "mock", "mode": request.mode},
+                guiding_question=(
+                    request.guiding_question_hint
+                    or "Пришли условие задачи, номер задания или свой текущий код."
+                ),
+                confidence=self._resolve_confidence(request, 0.42),
+                metadata={
+                    "provider": "mock",
+                    "mode": request.mode,
+                    "pedagogical_instruction": request.pedagogical_instruction,
+                },
             )
 
         if request.mode == "concept_explainer":
@@ -74,9 +90,19 @@ class MockLLMProvider(LLMProvider):
                     f"Ключевая идея: {excerpt} Сначала сформулируй правило своими словами, "
                     "потом проверь его на небольшом примере."
                 ),
-                guiding_question="Какой небольшой пример по этой теме ты можешь разобрать сам?",
-                confidence=0.84 if request.context else 0.58,
-                metadata={"provider": "mock", "mode": request.mode},
+                guiding_question=(
+                    request.guiding_question_hint
+                    or "Какой небольшой пример по этой теме ты можешь разобрать сам?"
+                ),
+                confidence=self._resolve_confidence(
+                    request,
+                    0.84 if request.context else 0.58,
+                ),
+                metadata={
+                    "provider": "mock",
+                    "mode": request.mode,
+                    "pedagogical_instruction": request.pedagogical_instruction,
+                },
             )
 
         if request.mode == "code_feedback":
@@ -85,9 +111,16 @@ class MockLLMProvider(LLMProvider):
                     f"Смотри на код как на последовательность состояний. {excerpt} "
                     "Сначала проверь инвариант и крайние случаи."
                 ),
-                guiding_question="На каком входе программа начинает вести себя не так, как ожидается?",
-                confidence=0.73,
-                metadata={"provider": "mock", "mode": request.mode},
+                guiding_question=(
+                    request.guiding_question_hint
+                    or "На каком входе программа начинает вести себя не так, как ожидается?"
+                ),
+                confidence=self._resolve_confidence(request, 0.73),
+                metadata={
+                    "provider": "mock",
+                    "mode": request.mode,
+                    "pedagogical_instruction": request.pedagogical_instruction,
+                },
             )
 
         return LLMGenerationResult(
@@ -95,9 +128,19 @@ class MockLLMProvider(LLMProvider):
                 f"Подсказка уровня {request.hint_level}: {excerpt} "
                 "Определи, какое состояние алгоритма должно быть известно после следующего шага."
             ),
-            guiding_question="Какое промежуточное значение или условие нужно вычислить первым?",
-            confidence=0.82 if request.context else 0.55,
-            metadata={"provider": "mock", "mode": request.mode},
+            guiding_question=(
+                request.guiding_question_hint
+                or "Какое промежуточное значение или условие нужно вычислить первым?"
+            ),
+            confidence=self._resolve_confidence(
+                request,
+                0.82 if request.context else 0.55,
+            ),
+            metadata={
+                "provider": "mock",
+                "mode": request.mode,
+                "pedagogical_instruction": request.pedagogical_instruction,
+            },
         )
 
     def _pick_confidence(self, request: LLMGenerationRequest) -> float:
@@ -110,6 +153,12 @@ class MockLLMProvider(LLMProvider):
         if request.mode == "code_feedback":
             return 0.73
         return 0.55
+
+    @staticmethod
+    def _resolve_confidence(request: LLMGenerationRequest, default: float) -> float:
+        if request.confidence_hint is not None:
+            return request.confidence_hint
+        return default
 
     @staticmethod
     def _build_excerpt(request: LLMGenerationRequest) -> str:

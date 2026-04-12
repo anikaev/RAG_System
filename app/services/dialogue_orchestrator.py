@@ -5,12 +5,12 @@ import re
 
 from app.providers.interfaces import (
     LLMGenerationRequest,
-    LLMProvider,
     RetrievedContext,
     RetrieverBackend,
 )
 from app.schemas.chat import ChatMode, ChatRequest, ChatResponseData
 from app.services.hint_service import HintDecision, HintService
+from app.services.llm_service import LLMService
 from app.services.session_store import SessionRecord, SessionStore
 
 logger = logging.getLogger(__name__)
@@ -33,12 +33,12 @@ class DialogueOrchestrator:
         self,
         *,
         session_store: SessionStore,
-        llm_provider: LLMProvider,
+        llm_service: LLMService,
         retriever: RetrieverBackend,
         hint_service: HintService,
     ) -> None:
         self.session_store = session_store
-        self.llm_provider = llm_provider
+        self.llm_service = llm_service
         self.retriever = retriever
         self.hint_service = hint_service
 
@@ -59,15 +59,19 @@ class DialogueOrchestrator:
 
         session = self._sync_hint_level(session, decision)
 
-        llm_result = self.llm_provider.generate(
+        llm_result = self.llm_service.generate(
             LLMGenerationRequest(
                 user_message=request.message,
                 mode=decision.mode.value,
                 hint_level=decision.next_hint_level,
                 refusal=decision.refusal,
                 context=retrieved_context,
+                pedagogical_instruction=decision.pedagogical_instruction,
                 hint_level_description=decision.hint_level_description,
                 response_template=decision.response_template,
+                response_template_variables=decision.response_template_variables,
+                guiding_question_hint=decision.guiding_question,
+                confidence_hint=decision.confidence_hint,
             )
         )
 
@@ -94,7 +98,7 @@ class DialogueOrchestrator:
             response_text=llm_result.response_text,
             hint_level=decision.next_hint_level,
             confidence=llm_result.confidence,
-            guiding_question=decision.guiding_question or llm_result.guiding_question,
+            guiding_question=llm_result.guiding_question or decision.guiding_question,
             used_context_ids=used_context_ids,
             refusal=decision.refusal,
         )

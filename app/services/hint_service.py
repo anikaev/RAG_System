@@ -42,8 +42,11 @@ class HintDecision:
     next_hint_level: int
     refusal: bool
     guiding_question: str | None
+    pedagogical_instruction: str | None
+    confidence_hint: float | None
     hint_level_description: str | None
     response_template: str | None
+    response_template_variables: dict[str, str]
 
 
 class HintService:
@@ -67,6 +70,7 @@ class HintService:
                 mode=ChatMode.REFUSE_FULL_SOLUTION,
                 level=current_hint_level,
                 refusal=True,
+                has_context=has_context,
             )
 
         if has_code or is_code_feedback_request(message) or has_specific_error_signal(message):
@@ -75,6 +79,7 @@ class HintService:
                 mode=ChatMode.CODE_FEEDBACK,
                 level=level,
                 refusal=False,
+                has_context=has_context,
             )
 
         if not has_context and len(message.split()) < 4:
@@ -82,6 +87,7 @@ class HintService:
                 mode=ChatMode.CLARIFY,
                 level=MIN_HINT_LEVEL,
                 refusal=False,
+                has_context=has_context,
             )
 
         if is_concept_question(message):
@@ -89,6 +95,7 @@ class HintService:
                 mode=ChatMode.CONCEPT_EXPLAINER,
                 level=current_hint_level,
                 refusal=False,
+                has_context=has_context,
             )
 
         next_level = self._compute_next_hint_level(message, current_hint_level)
@@ -96,6 +103,7 @@ class HintService:
             mode=ChatMode.HINT_ONLY,
             level=next_level,
             refusal=False,
+            has_context=has_context,
         )
 
     def _compute_next_hint_level(self, message: str, current: int) -> int:
@@ -132,14 +140,18 @@ class HintService:
         mode: ChatMode,
         level: int,
         refusal: bool,
+        has_context: bool,
     ) -> HintDecision:
         return HintDecision(
             mode=mode,
             next_hint_level=level,
             refusal=refusal,
             guiding_question=self._pick_guiding_question(mode, level),
+            pedagogical_instruction=self._pick_pedagogical_instruction(mode, level),
+            confidence_hint=self._pick_confidence_hint(mode, has_context=has_context),
             hint_level_description=HINT_LEVEL_DESCRIPTIONS.get(level),
             response_template=self._pick_response_template(mode, level),
+            response_template_variables=self._pick_response_template_variables(mode),
         )
 
     @staticmethod
@@ -149,7 +161,57 @@ class HintService:
         return GUIDING_QUESTIONS.get(mode.value)
 
     @staticmethod
+    def _pick_pedagogical_instruction(mode: ChatMode, level: int) -> str:
+        if mode == ChatMode.HINT_ONLY:
+            return HINT_LEVEL_DESCRIPTIONS[level]
+        if mode == ChatMode.CLARIFY:
+            return (
+                "Не давай содержательную подсказку, пока пользователь не уточнит "
+                "условие, текущий шаг или свой код."
+            )
+        if mode == ChatMode.CONCEPT_EXPLAINER:
+            return (
+                "Объясни принцип на простом примере и не переходи к полному решению "
+                "конкретной задачи."
+            )
+        if mode == ChatMode.CODE_FEEDBACK:
+            return (
+                "Разбери проблему в коде и предложи следующий отладочный шаг без "
+                "переписывания решения целиком."
+            )
+        if mode == ChatMode.REFUSE_FULL_SOLUTION:
+            return (
+                "Откажи в выдаче полного решения и перенаправь пользователя к пошаговой помощи."
+            )
+        raise ValueError(f"Unsupported chat mode for pedagogical instruction: {mode}")
+
+    @staticmethod
+    def _pick_confidence_hint(mode: ChatMode, *, has_context: bool) -> float:
+        if mode == ChatMode.REFUSE_FULL_SOLUTION:
+            return 0.96
+        if mode == ChatMode.CLARIFY:
+            return 0.42
+        if mode == ChatMode.CODE_FEEDBACK:
+            return 0.73
+        if mode in (ChatMode.CONCEPT_EXPLAINER, ChatMode.HINT_ONLY):
+            return 0.84 if has_context else 0.58
+        return 0.55
+
+    @staticmethod
     def _pick_response_template(mode: ChatMode, level: int) -> str | None:
         if mode == ChatMode.HINT_ONLY:
             return HINT_ONLY_RESPONSE_TEMPLATES.get(level)
         return _MODE_TEMPLATES.get(mode)
+
+    @staticmethod
+    def _pick_response_template_variables(mode: ChatMode) -> dict[str, str]:
+        if mode == ChatMode.CLARIFY:
+            return {
+                "reason": "не хватает условия задачи или текущего шага",
+                "requested_context": "условие задачи, номер задания или свой текущий код",
+            }
+        if mode == ChatMode.REFUSE_FULL_SOLUTION:
+            return {
+                "refusal_reason": "Это не поможет тебе в обучении.",
+            }
+        return {}

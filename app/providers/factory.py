@@ -6,6 +6,7 @@ from app.providers.fallback_retriever import FallbackRetriever
 from app.providers.interfaces import CodeExecutionBackend, EmbeddingProvider, LLMProvider, RetrieverBackend
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
+from app.providers.openai_llm_provider import OpenAILLMProvider
 from app.providers.pgvector_retriever import PgvectorRetrieverBackend
 from app.providers.stub_code_runner import LocalStubCodeRunner
 
@@ -13,6 +14,8 @@ from app.providers.stub_code_runner import LocalStubCodeRunner
 def build_llm_provider(settings: Settings) -> LLMProvider:
     if settings.llm_provider_mode == "mock":
         return MockLLMProvider()
+    if settings.llm_provider_mode == "openai":
+        return OpenAILLMProvider(settings)
     raise ValueError(f"Unsupported llm_provider_mode: {settings.llm_provider_mode}")
 
 

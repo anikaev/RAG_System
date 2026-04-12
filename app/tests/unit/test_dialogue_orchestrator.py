@@ -7,6 +7,7 @@ from app.providers.mock_llm_provider import MockLLMProvider
 from app.schemas.chat import ChatMode, ChatRequest, TaskContext
 from app.services.dialogue_orchestrator import DialogueOrchestrator
 from app.services.hint_service import HintService
+from app.services.llm_service import LLMService
 from app.services.session_store import InMemorySessionStore
 
 
@@ -36,7 +37,7 @@ def _build_orchestrator(
 ) -> DialogueOrchestrator:
     return DialogueOrchestrator(
         session_store=InMemorySessionStore(),
-        llm_provider=MockLLMProvider(),
+        llm_service=LLMService(primary_provider=MockLLMProvider()),
         retriever=retriever or StubRetriever(),
         hint_service=HintService(),
     )
@@ -71,6 +72,10 @@ class TestEndToEndModes:
         ))
         assert result.mode == ChatMode.CLARIFY
         assert result.hint_level == 0
+        assert result.response_text.startswith("Пока контекста мало:")
+        assert result.guiding_question == (
+            "Что именно у тебя уже есть: условие, идея решения или фрагмент кода?"
+        )
 
     def test_hint_only_generic_request(self):
         orch = _build_orchestrator()
@@ -169,7 +174,7 @@ class TestHistoryPersistence:
         store = InMemorySessionStore()
         orch = DialogueOrchestrator(
             session_store=store,
-            llm_provider=MockLLMProvider(),
+            llm_service=LLMService(primary_provider=MockLLMProvider()),
             retriever=StubRetriever(),
             hint_service=HintService(),
         )

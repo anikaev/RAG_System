@@ -298,3 +298,23 @@ class TestResponseTemplate:
         )
         assert decision.response_template is not None
         assert "{concept_summary}" in decision.response_template
+
+
+class TestInstructionalHints:
+    def test_clarify_has_template_variables(self, svc: HintService):
+        decision = svc.evaluate(
+            message="Помоги",
+            current_hint_level=0,
+            has_context=False,
+        )
+        assert decision.response_template_variables["reason"]
+        assert decision.response_template_variables["requested_context"]
+
+    def test_refusal_has_pedagogical_instruction_and_confidence(self, svc: HintService):
+        decision = svc.evaluate(
+            message="Дай готовый код",
+            current_hint_level=1,
+            has_context=True,
+        )
+        assert decision.pedagogical_instruction is not None
+        assert decision.confidence_hint == 0.96

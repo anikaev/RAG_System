@@ -22,8 +22,12 @@ class LLMGenerationRequest(BaseModel):
     hint_level: int = Field(ge=0, le=4)
     refusal: bool = False
     context: list[RetrievedContext] = Field(default_factory=list)
+    pedagogical_instruction: str | None = None
     hint_level_description: str | None = None
     response_template: str | None = None
+    response_template_variables: dict[str, str] = Field(default_factory=dict)
+    guiding_question_hint: str | None = None
+    confidence_hint: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class LLMGenerationResult(BaseModel):
