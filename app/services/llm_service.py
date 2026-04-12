@@ -36,9 +36,12 @@ class LLMService:
             return self._post_process(request, result, used_fallback=False)
         except Exception as exc:
             logger.warning(
-                "llm.primary_failed mode=%s error=%s",
-                request.mode,
-                exc,
+                "llm.primary_failed",
+                extra={
+                    "event": "llm.primary_failed",
+                    "mode": request.mode,
+                    "error": str(exc),
+                },
             )
             fallback_result = self.fallback_provider.generate(request)
             return self._post_process(request, fallback_result, used_fallback=True)
@@ -53,7 +56,13 @@ class LLMService:
         sanitized = self._sanitize_result(result)
 
         if self._violates_policy(request, sanitized.response_text):
-            logger.warning("llm.policy_violation_detected mode=%s", request.mode)
+            logger.warning(
+                "llm.policy_violation_detected",
+                extra={
+                    "event": "llm.policy_violation_detected",
+                    "mode": request.mode,
+                },
+            )
             sanitized = self._safe_fallback_result(request)
             used_fallback = True
 

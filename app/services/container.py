@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from app.core.metrics import MetricsRegistry
 from app.core.config import Settings
 from app.db.bootstrap import seed_knowledge_chunks
 from app.db.session import DatabaseSessionManager
@@ -36,7 +37,11 @@ class ServiceContainer:
     db_manager: DatabaseSessionManager | None = None
 
 
-def build_service_container(settings: Settings) -> ServiceContainer:
+def build_service_container(
+    settings: Settings,
+    *,
+    metrics_registry: MetricsRegistry | None = None,
+) -> ServiceContainer:
     embedding_provider = build_embedding_provider(settings)
     session_store, db_manager = _build_session_store(settings, embedding_provider)
     llm_provider = build_llm_provider(settings)
@@ -49,6 +54,12 @@ def build_service_container(settings: Settings) -> ServiceContainer:
 
     hint_service = HintService()
     llm_service = LLMService(primary_provider=llm_provider)
+    code_service = CodeService(
+        settings=settings,
+        session_store=session_store,
+        code_backend=code_backend,
+        metrics_registry=metrics_registry,
+    )
 
     return ServiceContainer(
         session_store=session_store,
@@ -63,12 +74,9 @@ def build_service_container(settings: Settings) -> ServiceContainer:
             llm_service=llm_service,
             retriever=retriever,
             hint_service=hint_service,
+            code_service=code_service,
         ),
-        code_service=CodeService(
-            settings=settings,
-            session_store=session_store,
-            code_backend=code_backend,
-        ),
+        code_service=code_service,
         db_manager=db_manager,
     )
 

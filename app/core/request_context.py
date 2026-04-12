@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from time import perf_counter
 from contextvars import ContextVar
 from typing import Any, cast
 from uuid import uuid4
@@ -10,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 
 from app.core.config import Settings
+from app.core.metrics import MetricsRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -41,18 +43,49 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get(self.settings.request_id_header) or str(uuid4())
         request.state.request_id = request_id
         token = _request_id_ctx.set(request_id)
+        started_at = perf_counter()
+        metrics = cast(MetricsRegistry | None, getattr(request.app.state, "metrics", None))
 
-        logger.info("request.started method=%s path=%s", request.method, request.url.path)
         try:
+            logger.info(
+                "request.started",
+                extra={
+                    "event": "request.started",
+                    "http_method": request.method,
+                    "path": request.url.path,
+                },
+            )
             response = await call_next(request)
-        finally:
+        except Exception:
+            latency_ms = (perf_counter() - started_at) * 1000
+            if metrics is not None:
+                metrics.record_request(status_code=500, latency_ms=latency_ms)
+            logger.exception(
+                "request.failed",
+                extra={
+                    "event": "request.failed",
+                    "http_method": request.method,
+                    "path": request.url.path,
+                    "status_code": 500,
+                    "latency_ms": round(latency_ms, 3),
+                },
+            )
             _request_id_ctx.reset(token)
+            raise
 
         response.headers[self.settings.request_id_header] = request_id
+        latency_ms = (perf_counter() - started_at) * 1000
+        if metrics is not None:
+            metrics.record_request(status_code=response.status_code, latency_ms=latency_ms)
         logger.info(
-            "request.completed method=%s path=%s status=%s",
-            request.method,
-            request.url.path,
-            response.status_code,
+            "request.completed",
+            extra={
+                "event": "request.completed",
+                "http_method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "latency_ms": round(latency_ms, 3),
+            },
         )
+        _request_id_ctx.reset(token)
         return response

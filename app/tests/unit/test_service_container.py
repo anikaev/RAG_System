@@ -4,6 +4,7 @@ import pytest
 
 from app.core.config import Settings
 from app.providers.compatible_api_llm_provider import CompatibleAPILLMProvider
+from app.providers.database_retriever import DatabaseLexicalRetriever
 from app.providers.docker_code_runner import DockerCodeExecutionBackend
 from app.providers.fallback_retriever import FallbackRetriever
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
@@ -75,3 +76,17 @@ def test_service_container_raises_when_pgvector_requires_database_and_fallback_d
 
     with pytest.raises(ValueError):
         build_service_container(settings)
+
+
+def test_service_container_prefers_database_retriever_when_database_is_available(tmp_path):
+    settings = Settings(
+        postgres_url=f"sqlite+pysqlite:///{tmp_path / 'container.db'}",
+        session_backend="database",
+        database_bootstrap_schema=True,
+        database_fallback_to_memory=False,
+        seed_demo_data_on_startup=True,
+    )
+
+    container = build_service_container(settings)
+
+    assert isinstance(container.retriever, DatabaseLexicalRetriever)

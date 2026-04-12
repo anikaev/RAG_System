@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from app.core.config import Settings
 from app.providers.interfaces import RetrievedContext
 from app.providers.mock_llm_provider import MockLLMProvider
+from app.providers.stub_code_runner import LocalStubCodeRunner
 from app.schemas.chat import ChatMode, ChatRequest, TaskContext
+from app.services.code_service import CodeService
 from app.services.dialogue_orchestrator import DialogueOrchestrator
 from app.services.hint_service import HintService
 from app.services.llm_service import LLMService
@@ -35,11 +38,17 @@ class EmptyRetriever:
 def _build_orchestrator(
     retriever=None,
 ) -> DialogueOrchestrator:
+    session_store = InMemorySessionStore()
     return DialogueOrchestrator(
-        session_store=InMemorySessionStore(),
+        session_store=session_store,
         llm_service=LLMService(primary_provider=MockLLMProvider()),
         retriever=retriever or StubRetriever(),
         hint_service=HintService(),
+        code_service=CodeService(
+            settings=Settings(session_backend="memory", seed_demo_data_on_startup=False),
+            session_store=session_store,
+            code_backend=LocalStubCodeRunner(),
+        ),
     )
 
 
@@ -93,6 +102,7 @@ class TestEndToEndModes:
             message="```python\nfor i in range(10):\n    print(i)\n```",
         ))
         assert result.mode == ChatMode.CODE_FEEDBACK
+        assert "sandbox runner" in result.response_text.lower()
 
     def test_short_error_without_context_routes_to_code_feedback(self):
         orch = _build_orchestrator(retriever=EmptyRetriever())
@@ -102,6 +112,15 @@ class TestEndToEndModes:
         ))
         assert result.mode == ChatMode.CODE_FEEDBACK
         assert "разбор кода" in result.response_text.lower()
+
+    def test_code_feedback_uses_code_service_output_for_syntax_errors(self):
+        orch = _build_orchestrator(retriever=EmptyRetriever())
+        result = orch.handle(ChatRequest(
+            user_id="u1",
+            message="```python\nfor i in range(3)\n    print(i)\n```",
+        ))
+        assert result.mode == ChatMode.CODE_FEEDBACK
+        assert "сначала исправь синтаксис" in result.response_text.lower()
 
 
 class TestHintProgression:
@@ -177,6 +196,11 @@ class TestHistoryPersistence:
             llm_service=LLMService(primary_provider=MockLLMProvider()),
             retriever=StubRetriever(),
             hint_service=HintService(),
+            code_service=CodeService(
+                settings=Settings(session_backend="memory", seed_demo_data_on_startup=False),
+                session_store=store,
+                code_backend=LocalStubCodeRunner(),
+            ),
         )
         result = orch.handle(ChatRequest(
             user_id="u1",
@@ -186,6 +210,27 @@ class TestHistoryPersistence:
         assert len(history) == 2
         assert history[0].role == "user"
         assert history[1].role == "assistant"
+
+    def test_code_feedback_does_not_duplicate_history(self):
+        store = InMemorySessionStore()
+        orch = DialogueOrchestrator(
+            session_store=store,
+            llm_service=LLMService(primary_provider=MockLLMProvider()),
+            retriever=EmptyRetriever(),
+            hint_service=HintService(),
+            code_service=CodeService(
+                settings=Settings(session_backend="memory", seed_demo_data_on_startup=False),
+                session_store=store,
+                code_backend=LocalStubCodeRunner(),
+            ),
+        )
+        result = orch.handle(ChatRequest(
+            user_id="u1",
+            message="```python\nfor i in range(3)\n    print(i)\n```",
+        ))
+        history = store.get_history(result.session_id)
+        assert len(history) == 2
+        assert history[1].message_type == "code_feedback"
 
 
 class TestGuidingQuestion:

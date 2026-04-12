@@ -35,13 +35,16 @@ app/kb/loaders.py
 app/kb/models.py
 app/providers/__init__.py
 app/providers/compatible_api_llm_provider.py
+app/providers/database_retriever.py
 app/providers/docker_code_runner.py
 app/providers/factory.py
 app/providers/fallback_retriever.py
 app/providers/interfaces.py
+app/providers/lexical_retrieval.py
 app/providers/mock_embedding_provider.py
 app/providers/mock_llm_provider.py
 app/providers/pgvector_retriever.py
+app/providers/retrieval_cache.py
 app/providers/stub_code_runner.py
 app/schemas/__init__.py
 app/schemas/chat.py
@@ -60,6 +63,7 @@ app/tests/conftest.py
 app/tests/integration/test_api.py
 app/tests/integration/test_migrations.py
 app/tests/unit/test_cli_ingest.py
+app/tests/unit/test_database_retriever.py
 app/tests/unit/test_dialogue_orchestrator.py
 app/tests/unit/test_docker_code_runner.py
 app/tests/unit/test_fallback_retriever.py
@@ -69,6 +73,7 @@ app/tests/unit/test_llm_service.py
 app/tests/unit/test_mock_providers.py
 app/tests/unit/test_pgvector_retriever.py
 app/tests/unit/test_policies.py
+app/tests/unit/test_retrieval_cache.py
 app/tests/unit/test_service_container.py
 cli/__init__.py
 cli/client.py

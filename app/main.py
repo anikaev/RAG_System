@@ -6,6 +6,7 @@ from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.metrics import MetricsRegistry
 from app.core.request_context import RequestContextMiddleware
 from app.services.container import build_service_container
 
@@ -20,8 +21,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs",
         openapi_url="/openapi.json",
     )
+    metrics_registry = MetricsRegistry()
     application.state.settings = resolved_settings
-    application.state.services = build_service_container(resolved_settings)
+    application.state.metrics = metrics_registry
+    application.state.services = build_service_container(
+        resolved_settings,
+        metrics_registry=metrics_registry,
+    )
     application.add_middleware(RequestContextMiddleware, settings=resolved_settings)
     application.include_router(api_router)
     register_exception_handlers(application)

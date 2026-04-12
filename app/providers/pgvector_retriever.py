@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.db.session import DatabaseSessionManager
 from app.providers.interfaces import EmbeddingProvider, RetrievedContext, RetrieverBackend
+from app.providers.retrieval_cache import (
+    NoOpRetrievalCache,
+    RetrievalCacheBackend,
+    build_retrieval_cache_key,
+)
 
 
 class PgvectorBackendUnavailable(RuntimeError):
@@ -21,10 +26,14 @@ class PgvectorRetrieverBackend(RetrieverBackend):
         embedding_provider: EmbeddingProvider,
         *,
         settings: Settings,
+        cache_backend: RetrievalCacheBackend | None = None,
+        cache_ttl_seconds: int = 120,
     ) -> None:
         self.db_manager = db_manager
         self.embedding_provider = embedding_provider
         self.settings = settings
+        self.cache_backend = cache_backend or NoOpRetrievalCache()
+        self.cache_ttl_seconds = cache_ttl_seconds
 
     def search(
         self,
@@ -35,6 +44,18 @@ class PgvectorRetrieverBackend(RetrieverBackend):
         task_id: str | None = None,
         top_k: int = 3,
     ) -> list[RetrievedContext]:
+        cache_key = build_retrieval_cache_key(
+            "pgvector",
+            query,
+            subject=subject,
+            topic=topic,
+            task_id=task_id,
+            top_k=top_k,
+        )
+        cached = self.cache_backend.get_many(cache_key)
+        if cached is not None:
+            return cached
+
         query_embedding = self.embedding_provider.embed([query])[0]
 
         with self.db_manager.session_scope() as db:
@@ -66,7 +87,7 @@ class PgvectorRetrieverBackend(RetrieverBackend):
                 },
             ).all()
 
-        return [
+        results = [
             RetrievedContext(
                 chunk_id=str(row.chunk_id),
                 content=str(row.content),
@@ -75,6 +96,12 @@ class PgvectorRetrieverBackend(RetrieverBackend):
             )
             for row in rows
         ]
+        self.cache_backend.set_many(
+            cache_key,
+            results,
+            ttl_seconds=self.cache_ttl_seconds,
+        )
+        return results
 
     def is_ready(self) -> tuple[bool, str | None]:
         try:

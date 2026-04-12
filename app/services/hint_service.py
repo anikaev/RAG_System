@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.core.audit import emit_audit_event, has_prompt_injection_signal
 from app.core.policies import (
     has_escalation_signal,
     has_near_solution_signal,
@@ -64,8 +65,22 @@ class HintService:
         current_hint_level: int,
         has_context: bool,
         has_code: bool = False,
+        session_id: str | None = None,
     ) -> HintDecision:
+        if has_prompt_injection_signal(message):
+            emit_audit_event(
+                "prompt_injection_pattern",
+                session_id=session_id,
+                message_excerpt=message,
+            )
+
         if should_refuse_full_solution(message):
+            emit_audit_event(
+                "full_solution_request",
+                session_id=session_id,
+                mode=ChatMode.REFUSE_FULL_SOLUTION.value,
+                message_excerpt=message,
+            )
             return self._decision(
                 mode=ChatMode.REFUSE_FULL_SOLUTION,
                 level=current_hint_level,

@@ -9,6 +9,8 @@ from app.providers.interfaces import (
     RetrieverBackend,
 )
 from app.schemas.chat import ChatMode, ChatRequest, ChatResponseData
+from app.schemas.code import CodeCheckRequest, CodeCheckResponseData, SupportedLanguage
+from app.services.code_service import CodeService
 from app.services.hint_service import HintDecision, HintService
 from app.services.llm_service import LLMService
 from app.services.session_store import SessionRecord, SessionStore
@@ -36,11 +38,13 @@ class DialogueOrchestrator:
         llm_service: LLMService,
         retriever: RetrieverBackend,
         hint_service: HintService,
+        code_service: CodeService,
     ) -> None:
         self.session_store = session_store
         self.llm_service = llm_service
         self.retriever = retriever
         self.hint_service = hint_service
+        self.code_service = code_service
 
     def handle(self, request: ChatRequest) -> ChatResponseData:
         session = self.session_store.get_or_create(
@@ -48,14 +52,24 @@ class DialogueOrchestrator:
         )
 
         retrieved_context = self._retrieve(request)
-        has_code = self._message_contains_code(request.message)
+        extracted_code = self._extract_code(request.message)
+        has_code = extracted_code is not None
 
         decision = self.hint_service.evaluate(
             message=request.message,
             current_hint_level=session.current_hint_level,
             has_context=bool(retrieved_context),
             has_code=has_code,
+            session_id=session.session_id,
         )
+
+        llm_context = retrieved_context
+        if decision.mode == ChatMode.CODE_FEEDBACK and extracted_code is not None:
+            llm_context = self._augment_with_code_feedback(
+                request=request,
+                code=extracted_code,
+                retrieved_context=retrieved_context,
+            )
 
         session = self._sync_hint_level(session, decision)
 
@@ -65,7 +79,7 @@ class DialogueOrchestrator:
                 mode=decision.mode.value,
                 hint_level=decision.next_hint_level,
                 refusal=decision.refusal,
-                context=retrieved_context,
+                context=llm_context,
                 pedagogical_instruction=decision.pedagogical_instruction,
                 hint_level_description=decision.hint_level_description,
                 response_template=decision.response_template,
@@ -85,11 +99,15 @@ class DialogueOrchestrator:
         )
 
         logger.info(
-            "orchestrator.response session=%s mode=%s hint=%d confidence=%.2f",
-            session.session_id,
-            decision.mode.value,
-            decision.next_hint_level,
-            llm_result.confidence,
+            "orchestrator.response",
+            extra={
+                "event": "orchestrator.response",
+                "session_id": session.session_id,
+                "mode": decision.mode.value,
+                "hint_level": decision.next_hint_level,
+                "confidence": round(llm_result.confidence, 3),
+                "used_context_count": len(used_context_ids),
+            },
         )
 
         return ChatResponseData(
@@ -146,7 +164,60 @@ class DialogueOrchestrator:
         )
 
     @staticmethod
-    def _message_contains_code(message: str) -> bool:
-        if _CODE_BLOCK_RE.search(message):
-            return True
-        return bool(_INLINE_CODE_LIKE_RE.search(message))
+    def _extract_code(message: str) -> str | None:
+        match = _CODE_BLOCK_RE.search(message)
+        if match:
+            block = match.group(0)
+            stripped = re.sub(r"^```[A-Za-z0-9_+-]*\n?", "", block)
+            stripped = re.sub(r"\n?```$", "", stripped)
+            normalized = stripped.strip()
+            return normalized or None
+        if _INLINE_CODE_LIKE_RE.search(message):
+            normalized = message.strip()
+            return normalized or None
+        return None
+
+    def _augment_with_code_feedback(
+        self,
+        *,
+        request: ChatRequest,
+        code: str,
+        retrieved_context: list[RetrievedContext],
+    ) -> list[RetrievedContext]:
+        code_result = self.code_service.analyze_code(
+            CodeCheckRequest(
+                session_id=request.session_id,
+                user_id=request.user_id,
+                language=SupportedLanguage.PYTHON,
+                code=code,
+                task_id=request.task_context.task_id if request.task_context else None,
+            )
+        )
+        code_context = RetrievedContext(
+            chunk_id="code_check:summary",
+            content=self._build_code_feedback_context(code_result),
+            score=1.0,
+            metadata={"source": "code_check", "mode": "code_feedback"},
+        )
+        return [code_context, *retrieved_context]
+
+    @staticmethod
+    def _build_code_feedback_context(code_result: CodeCheckResponseData) -> str:
+        issue_summaries = "; ".join(
+            f"{item.code}: {item.message}"
+            for item in code_result.issues
+        )
+        parts = [
+            code_result.feedback_text,
+            (
+                "Статус: "
+                f"accepted={code_result.accepted}, "
+                f"syntax_ok={code_result.summary.syntax_ok}, "
+                f"execution_status={code_result.summary.execution_status.value}, "
+                f"public_tests={code_result.summary.public_tests_passed}/{code_result.summary.public_tests_total}, "
+                f"hidden_tests={code_result.summary.hidden_tests_summary}."
+            ),
+        ]
+        if issue_summaries:
+            parts.append(f"Проблемы: {issue_summaries}.")
+        return " ".join(parts)

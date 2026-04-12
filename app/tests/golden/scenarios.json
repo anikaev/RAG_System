@@ -1,0 +1,106 @@
+[
+  {
+    "name": "refuse_full_solution_request",
+    "endpoint": "/v1/chat/respond",
+    "method": "POST",
+    "request_json": {
+      "user_id": "golden-user",
+      "message": "Реши за меня задачу 27 и дай готовый код"
+    },
+    "expected_status": 200,
+    "expected_ok": true,
+    "expected_mode": "refuse_full_solution",
+    "expected_refusal": true,
+    "expected_response_contains": [
+      "Я не выдаю готовое решение целиком",
+      "Могу помочь по шагам"
+    ]
+  },
+  {
+    "name": "generic_hint_only_request",
+    "endpoint": "/v1/chat/respond",
+    "method": "POST",
+    "request_json": {
+      "user_id": "golden-user",
+      "message": "Не понимаю задачу 27 по массивам"
+    },
+    "expected_status": 200,
+    "expected_ok": true,
+    "expected_mode": "hint_only",
+    "expected_hint_level": 1,
+    "expected_response_contains": [
+      "Подсказка уровня 1:",
+      "Сосредоточься на ключевой идее"
+    ]
+  },
+  {
+    "name": "code_with_syntax_error",
+    "endpoint": "/v1/code/check",
+    "method": "POST",
+    "request_json": {
+      "user_id": "golden-user",
+      "language": "python",
+      "code": "for i in range(3)\n    print(i)"
+    },
+    "expected_status": 200,
+    "expected_ok": true,
+    "expected_accepted": false,
+    "expected_issue_codes": [
+      "syntax_error"
+    ],
+    "expected_feedback_contains": [
+      "Сначала исправь синтаксис"
+    ]
+  },
+  {
+    "name": "failing_public_tests",
+    "endpoint": "/v1/code/check",
+    "method": "POST",
+    "request_json": {
+      "user_id": "golden-user",
+      "language": "python",
+      "task_id": "demo-sum",
+      "code": "print(0)"
+    },
+    "backend_override": "failed_tests",
+    "expected_status": 200,
+    "expected_ok": true,
+    "expected_accepted": false,
+    "expected_issue_codes": [
+      "public_tests_failed"
+    ],
+    "expected_feedback_contains": [
+      "не прошёл все публичные тесты",
+      "Проверь обработку крайних случаев"
+    ]
+  },
+  {
+    "name": "empty_chat_message_validation_error",
+    "endpoint": "/v1/chat/respond",
+    "method": "POST",
+    "request_json": {
+      "user_id": "golden-user",
+      "message": ""
+    },
+    "expected_status": 422,
+    "expected_ok": false,
+    "expected_error_code": "validation_error",
+    "expected_error_message": "Request validation failed."
+  },
+  {
+    "name": "code_feedback_via_chat_flow",
+    "endpoint": "/v1/chat/respond",
+    "method": "POST",
+    "request_json": {
+      "user_id": "golden-user",
+      "message": "```python\nfor i in range(3)\n    print(i)\n```"
+    },
+    "expected_status": 200,
+    "expected_ok": true,
+    "expected_mode": "code_feedback",
+    "expected_response_contains": [
+      "Разбор кода:",
+      "Сначала исправь синтаксис"
+    ]
+  }
+]

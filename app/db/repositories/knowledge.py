@@ -15,6 +15,24 @@ class KnowledgeChunkRepository:
         stmt = select(KnowledgeChunk).where(KnowledgeChunk.chunk_id == chunk_id)
         return db.execute(stmt).scalar_one_or_none()
 
+    def list_for_retrieval(
+        self,
+        db: Session,
+        *,
+        subject: str | None = None,
+        topic: str | None = None,
+        task_id: str | None = None,
+    ) -> list[KnowledgeChunk]:
+        stmt = select(KnowledgeChunk)
+        if subject is not None:
+            stmt = stmt.where(KnowledgeChunk.subject == subject)
+        if topic is not None:
+            stmt = stmt.where(KnowledgeChunk.topic == topic)
+        if task_id is not None:
+            stmt = stmt.where(KnowledgeChunk.task_id == task_id)
+        stmt = stmt.order_by(KnowledgeChunk.chunk_id.asc())
+        return list(db.execute(stmt).scalars().all())
+
     def upsert(
         self,
         db: Session,

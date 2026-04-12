@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     embedding_provider_mode: Literal["mock"] = "mock"
     retriever_backend_mode: Literal["fallback", "pgvector"] = "fallback"
     retriever_fallback_to_lexical: bool = True
+    retrieval_cache_backend_mode: Literal["auto", "disabled", "redis"] = "auto"
+    retrieval_cache_ttl_seconds: int = 120
     code_execution_backend_mode: Literal["stub", "docker"] = "stub"
     llm_api_key: str | None = None
     llm_api_base_url: str | None = "http://127.0.0.1:8001/v1"

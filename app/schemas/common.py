@@ -39,6 +39,17 @@ class HealthResponseData(BaseModel):
     status: str = "ok"
 
 
+class MetricsResponseData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total_requests: int
+    total_errors: int
+    avg_latency_ms: float
+    total_code_executions: int
+    avg_code_execution_ms: float
+    runner_status_counts: dict[str, int] = Field(default_factory=dict)
+
+
 def success_response(data: ResponseDataT, request_id: str) -> ApiResponse[ResponseDataT]:
     return ApiResponse[ResponseDataT](
         ok=True,

@@ -1,6 +1,7 @@
 """Provider abstractions and mock/fallback implementations."""
 
 from app.providers.compatible_api_llm_provider import CompatibleAPILLMProvider
+from app.providers.database_retriever import DatabaseLexicalRetriever
 from app.providers.docker_code_runner import DockerCodeExecutionBackend
 from app.providers.factory import (
     build_code_execution_backend,
@@ -27,6 +28,7 @@ __all__ = [
     "CompatibleAPILLMProvider",
     "CodeExecutionBackend",
     "DockerCodeExecutionBackend",
+    "DatabaseLexicalRetriever",
     "CodeExecutionRequest",
     "CodeExecutionResult",
     "EmbeddingProvider",

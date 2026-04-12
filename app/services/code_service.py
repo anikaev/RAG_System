@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import ast
+import logging
+from time import perf_counter
 
+from app.core.audit import emit_audit_event
 from app.core.config import Settings
+from app.core.metrics import MetricsRegistry
 from app.core.security import find_blocked_code_patterns, redact_internal_paths
 from app.providers.interfaces import CodeExecutionBackend, CodeExecutionRequest, CodeExecutionResult
 from app.schemas.code import (
@@ -15,6 +19,8 @@ from app.schemas.code import (
 )
 from app.services.session_store import SessionStore
 
+logger = logging.getLogger(__name__)
+
 
 class CodeService:
     def __init__(
@@ -23,12 +29,25 @@ class CodeService:
         settings: Settings,
         session_store: SessionStore,
         code_backend: CodeExecutionBackend,
+        metrics_registry: MetricsRegistry | None = None,
     ) -> None:
         self.settings = settings
         self.session_store = session_store
         self.code_backend = code_backend
+        self.metrics_registry = metrics_registry
 
     def check_code(self, request: CodeCheckRequest) -> CodeCheckResponseData:
+        return self._run_check(request, persist_exchange=True)
+
+    def analyze_code(self, request: CodeCheckRequest) -> CodeCheckResponseData:
+        return self._run_check(request, persist_exchange=False)
+
+    def _run_check(
+        self,
+        request: CodeCheckRequest,
+        *,
+        persist_exchange: bool,
+    ) -> CodeCheckResponseData:
         session = self.session_store.get_or_create(request.session_id, request.user_id)
         issues: list[CodeIssue] = []
 
@@ -52,7 +71,17 @@ class CodeService:
                 ),
                 feedback_text="Сократи пример до минимально воспроизводимого фрагмента.",
             )
-            self._store_exchange(session.session_id, request.code, response.feedback_text)
+            self._maybe_store_exchange(
+                persist_exchange,
+                session.session_id,
+                request.code,
+                response.feedback_text,
+            )
+            self._log_code_result(
+                session_id=session.session_id,
+                execution_status=response.summary.execution_status.value,
+                runner_status="blocked",
+            )
             return response
 
         blocked_patterns = find_blocked_code_patterns(
@@ -60,6 +89,13 @@ class CodeService:
             self.settings.blocked_code_patterns,
         )
         if blocked_patterns:
+            emit_audit_event(
+                "runner_blocked",
+                session_id=session.session_id,
+                mode="code_check",
+                message_excerpt=request.code,
+                runner_status="blocked_pattern",
+            )
             issues.extend(
                 CodeIssue(
                     code="blocked_pattern",
@@ -83,7 +119,17 @@ class CodeService:
                     "или динамическое исполнение кода."
                 ),
             )
-            self._store_exchange(session.session_id, request.code, response.feedback_text)
+            self._maybe_store_exchange(
+                persist_exchange,
+                session.session_id,
+                request.code,
+                response.feedback_text,
+            )
+            self._log_code_result(
+                session_id=session.session_id,
+                execution_status=response.summary.execution_status.value,
+                runner_status="blocked_pattern",
+            )
             return response
 
         try:
@@ -110,9 +156,20 @@ class CodeService:
                 ),
                 feedback_text="Сначала исправь синтаксис, затем повтори проверку.",
             )
-            self._store_exchange(session.session_id, request.code, response.feedback_text)
+            self._maybe_store_exchange(
+                persist_exchange,
+                session.session_id,
+                request.code,
+                response.feedback_text,
+            )
+            self._log_code_result(
+                session_id=session.session_id,
+                execution_status=response.summary.execution_status.value,
+                runner_status="syntax_error",
+            )
             return response
 
+        started_at = perf_counter()
         execution_result = self.code_backend.execute(
             CodeExecutionRequest(
                 language=request.language.value,
@@ -120,10 +177,24 @@ class CodeService:
                 task_id=request.task_id,
             )
         )
+        duration_ms = (perf_counter() - started_at) * 1000
         accepted = execution_result.runner_available is False or execution_result.status == "validated"
         issues.extend(self._execution_issues(execution_result))
         feedback_text = self._build_execution_feedback(execution_result)
         execution_status = self._map_execution_status(execution_result)
+        if self.metrics_registry is not None:
+            self.metrics_registry.record_code_execution(
+                duration_ms=duration_ms,
+                runner_status=execution_result.status,
+            )
+        if execution_result.status in {"timeout", "failed_tests"}:
+            emit_audit_event(
+                "runner_timeout" if execution_result.status == "timeout" else "runner_blocked",
+                session_id=session.session_id,
+                mode="code_check",
+                message_excerpt=request.code,
+                runner_status=execution_result.status,
+            )
         response = self._build_response(
             session_id=session.session_id,
             accepted=accepted,
@@ -138,7 +209,18 @@ class CodeService:
             ),
             feedback_text=feedback_text,
         )
-        self._store_exchange(session.session_id, request.code, response.feedback_text)
+        self._maybe_store_exchange(
+            persist_exchange,
+            session.session_id,
+            request.code,
+            response.feedback_text,
+        )
+        self._log_code_result(
+            session_id=session.session_id,
+            execution_status=response.summary.execution_status.value,
+            runner_status=execution_result.status,
+            duration_ms=duration_ms,
+        )
         return response
 
     def _execution_issues(self, execution_result: CodeExecutionResult) -> list[CodeIssue]:
@@ -243,4 +325,33 @@ class CodeService:
             role="assistant",
             content=feedback_text,
             message_type="code_feedback",
+        )
+
+    def _maybe_store_exchange(
+        self,
+        persist_exchange: bool,
+        session_id: str,
+        code: str,
+        feedback_text: str,
+    ) -> None:
+        if persist_exchange:
+            self._store_exchange(session_id, code, feedback_text)
+
+    @staticmethod
+    def _log_code_result(
+        *,
+        session_id: str,
+        execution_status: str,
+        runner_status: str,
+        duration_ms: float | None = None,
+    ) -> None:
+        logger.info(
+            "code.check_completed",
+            extra={
+                "event": "code.check_completed",
+                "session_id": session_id,
+                "execution_status": execution_status,
+                "runner_status": runner_status,
+                "latency_ms": round(duration_ms, 3) if duration_ms is not None else None,
+            },
         )
