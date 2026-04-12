@@ -34,12 +34,13 @@ app/kb/ingest.py
 app/kb/loaders.py
 app/kb/models.py
 app/providers/__init__.py
+app/providers/compatible_api_llm_provider.py
+app/providers/docker_code_runner.py
 app/providers/factory.py
 app/providers/fallback_retriever.py
 app/providers/interfaces.py
 app/providers/mock_embedding_provider.py
 app/providers/mock_llm_provider.py
-app/providers/openai_llm_provider.py
 app/providers/pgvector_retriever.py
 app/providers/stub_code_runner.py
 app/schemas/__init__.py
@@ -60,6 +61,7 @@ app/tests/integration/test_api.py
 app/tests/integration/test_migrations.py
 app/tests/unit/test_cli_ingest.py
 app/tests/unit/test_dialogue_orchestrator.py
+app/tests/unit/test_docker_code_runner.py
 app/tests/unit/test_fallback_retriever.py
 app/tests/unit/test_hint_service.py
 app/tests/unit/test_kb_ingest.py

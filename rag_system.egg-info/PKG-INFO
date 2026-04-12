@@ -6,7 +6,6 @@ Requires-Python: <3.13,>=3.12
 Description-Content-Type: text/markdown
 Requires-Dist: alembic<2.0,>=1.14
 Requires-Dist: fastapi<1.0,>=0.115
-Requires-Dist: openai<2.0,>=1.75
 Requires-Dist: pgvector<1.0,>=0.3
 Requires-Dist: pydantic<3.0,>=2.9
 Requires-Dist: pydantic-settings<3.0,>=2.5
@@ -33,7 +32,9 @@ Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 - SQLAlchemy 2.x модели и Alembic migration для `ChatSession`, `ChatMessage`, `KnowledgeChunk`
 - хранение сессии, истории и `hint_level` в БД
 - provider abstractions: `LLMProvider`, `EmbeddingProvider`, `RetrieverBackend`, `CodeExecutionBackend`
+- `LLMService` с безопасным post-processing и template fallback
 - `MockLLMProvider` и `MockEmbeddingProvider` для локального deterministic runtime
+- опциональный `compatible_api`-режим для локальных или self-hosted open-source моделей
 - fallback retriever по `app/kb/seed`
 - seed демо knowledge chunks в БД при DB-режиме
 - базовые policy-ограничения на запросы полного решения
@@ -45,7 +46,7 @@ Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 
 - Redis пока не подключён к бизнес-логике.
 - Retrieval всё ещё работает через файловый fallback, а не через БД/pgvector backend.
-- mock LLM не использует внешний API и не генерирует ответы через реальную модель.
+- `compatible_api`-режим требует совместимый HTTP endpoint; при недоступности backend сервис автоматически уходит в безопасный fallback.
 - Docker sandbox runner ещё не выполняет код пользователя, endpoint `/v1/code/check` делает только статическую проверку и возвращает контролируемый статус `not_run`.
 - production execution backend оставлен на следующие этапы.
 - `pgvector` backend уже заскэфолден, но по умолчанию выключен и откатывается на lexical fallback, если PostgreSQL/extension/column ещё не готовы.
@@ -67,6 +68,18 @@ export RAG_POSTGRES_URL=postgresql+psycopg://rag:rag@localhost:5432/rag
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
+
+Для переключения на совместимый API поверх open-source модели:
+
+```bash
+export RAG_LLM_PROVIDER_MODE=compatible_api
+export RAG_LLM_API_BASE_URL=http://127.0.0.1:8001/v1
+export RAG_LLM_MODEL_NAME=your-local-model
+export RAG_LLM_API_KEY=optional_token
+uv run uvicorn app.main:app --reload
+```
+
+Если внешний LLM недоступен, вернул небезопасный ответ или не смог отдать структурированный JSON, `LLMService` откатится к template-based fallback.
 
 ## Запуск через Docker Compose
 
@@ -204,6 +217,6 @@ docker/
 
 ## Следующие этапы
 
-1. Вынести hint progression в отдельный `HintService` и собрать полноценный `DialogueOrchestrator`.
-2. Перенести retrieval с файлового fallback на DB-backed chunks как primary path.
-3. Заменить stub code backend на изолированный Docker runner с лимитами.
+1. Перенести retrieval с файлового fallback на DB-backed chunks как primary path.
+2. Заменить stub code backend на изолированный Docker runner с лимитами.
+3. Добавить audit/metrics слой и более строгие golden/integration tests для runner и LLM fallback.

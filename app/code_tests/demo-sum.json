@@ -1,0 +1,14 @@
+{
+  "public_tests": [
+    {
+      "stdin": "2 3\n",
+      "expected_stdout": "5\n"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "stdin": "10 -4\n",
+      "expected_stdout": "6\n"
+    }
+  ]
+}

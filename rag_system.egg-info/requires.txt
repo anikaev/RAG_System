@@ -1,6 +1,5 @@
 alembic<2.0,>=1.14
 fastapi<1.0,>=0.115
-openai<2.0,>=1.75
 pgvector<1.0,>=0.3
 pydantic<3.0,>=2.9
 pydantic-settings<3.0,>=2.5

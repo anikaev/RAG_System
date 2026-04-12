@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from app.core.config import Settings
 from app.db.session import DatabaseSessionManager
+from app.providers.compatible_api_llm_provider import CompatibleAPILLMProvider
+from app.providers.docker_code_runner import DockerCodeExecutionBackend
 from app.providers.fallback_retriever import FallbackRetriever
 from app.providers.interfaces import CodeExecutionBackend, EmbeddingProvider, LLMProvider, RetrieverBackend
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
-from app.providers.openai_llm_provider import OpenAILLMProvider
 from app.providers.pgvector_retriever import PgvectorRetrieverBackend
 from app.providers.stub_code_runner import LocalStubCodeRunner
 
@@ -14,8 +15,8 @@ from app.providers.stub_code_runner import LocalStubCodeRunner
 def build_llm_provider(settings: Settings) -> LLMProvider:
     if settings.llm_provider_mode == "mock":
         return MockLLMProvider()
-    if settings.llm_provider_mode == "openai":
-        return OpenAILLMProvider(settings)
+    if settings.llm_provider_mode == "compatible_api":
+        return CompatibleAPILLMProvider(settings)
     raise ValueError(f"Unsupported llm_provider_mode: {settings.llm_provider_mode}")
 
 
@@ -70,6 +71,8 @@ def build_retriever_backend(
 def build_code_execution_backend(settings: Settings) -> CodeExecutionBackend:
     if settings.code_execution_backend_mode == "stub":
         return LocalStubCodeRunner()
+    if settings.code_execution_backend_mode == "docker":
+        return DockerCodeExecutionBackend(settings)
     raise ValueError(
         "Unsupported code_execution_backend_mode: "
         f"{settings.code_execution_backend_mode}"

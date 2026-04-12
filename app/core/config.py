@@ -32,18 +32,23 @@ class Settings(BaseSettings):
     database_bootstrap_schema: bool = False
     database_echo: bool = False
     seed_demo_data_on_startup: bool = True
-    llm_provider_mode: Literal["mock", "openai"] = "mock"
+    llm_provider_mode: Literal["mock", "compatible_api"] = "mock"
     embedding_provider_mode: Literal["mock"] = "mock"
     retriever_backend_mode: Literal["fallback", "pgvector"] = "fallback"
     retriever_fallback_to_lexical: bool = True
-    code_execution_backend_mode: Literal["stub"] = "stub"
-    openai_api_key: str | None = None
-    openai_base_url: str | None = None
-    openai_model: str = "gpt-5"
+    code_execution_backend_mode: Literal["stub", "docker"] = "stub"
+    llm_api_key: str | None = None
+    llm_api_base_url: str | None = "http://127.0.0.1:8001/v1"
+    llm_model_name: str = "local-model"
+    llm_api_timeout_seconds: int = 30
 
     runner_timeout_seconds: int = 2
     runner_cpu_limit: float = 0.5
     runner_memory_mb: int = 128
+    runner_binary: str = "docker"
+    runner_image: str = "rag-python-runner:latest"
+    runner_workdir: str = "/workspace"
+    runner_tests_path: Path = Field(default=PROJECT_ROOT / "app" / "code_tests")
 
     max_chat_message_length: int = 4000
     max_code_length: int = 12000

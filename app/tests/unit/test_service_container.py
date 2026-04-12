@@ -3,10 +3,11 @@ from __future__ import annotations
 import pytest
 
 from app.core.config import Settings
+from app.providers.compatible_api_llm_provider import CompatibleAPILLMProvider
+from app.providers.docker_code_runner import DockerCodeExecutionBackend
 from app.providers.fallback_retriever import FallbackRetriever
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
-from app.providers.openai_llm_provider import OpenAILLMProvider
 from app.providers.stub_code_runner import LocalStubCodeRunner
 from app.services.container import build_service_container
 from app.services.llm_service import LLMService
@@ -27,16 +28,28 @@ def test_service_container_wires_mock_components():
     assert isinstance(container.retriever, FallbackRetriever)
 
 
-def test_service_container_supports_openai_provider_mode():
+def test_service_container_supports_compatible_api_provider_mode():
     settings = Settings(
         session_backend="memory",
-        llm_provider_mode="openai",
+        llm_provider_mode="compatible_api",
         seed_demo_data_on_startup=False,
     )
 
     container = build_service_container(settings)
 
-    assert isinstance(container.llm_provider, OpenAILLMProvider)
+    assert isinstance(container.llm_provider, CompatibleAPILLMProvider)
+
+
+def test_service_container_supports_docker_code_runner_mode():
+    settings = Settings(
+        session_backend="memory",
+        code_execution_backend_mode="docker",
+        seed_demo_data_on_startup=False,
+    )
+
+    container = build_service_container(settings)
+
+    assert isinstance(container.code_execution_backend, DockerCodeExecutionBackend)
 
 
 def test_service_container_falls_back_when_pgvector_requested_without_database():

@@ -4,7 +4,7 @@ import ast
 
 from app.core.config import Settings
 from app.core.security import find_blocked_code_patterns, redact_internal_paths
-from app.providers.interfaces import CodeExecutionBackend, CodeExecutionRequest
+from app.providers.interfaces import CodeExecutionBackend, CodeExecutionRequest, CodeExecutionResult
 from app.schemas.code import (
     CodeCheckRequest,
     CodeCheckResponseData,
@@ -120,17 +120,17 @@ class CodeService:
                 task_id=request.task_id,
             )
         )
-        feedback_text = redact_internal_paths(
-            "Синтаксис корректен. На этом этапе выполнена только безопасная статическая проверка; "
-            "sandbox runner ещё не подключён, поэтому код не исполнялся."
-        )
+        accepted = execution_result.runner_available is False or execution_result.status == "validated"
+        issues.extend(self._execution_issues(execution_result))
+        feedback_text = self._build_execution_feedback(execution_result)
+        execution_status = self._map_execution_status(execution_result)
         response = self._build_response(
             session_id=session.session_id,
-            accepted=True,
+            accepted=accepted,
             issues=issues,
             summary=ExecutionSummary(
                 syntax_ok=True,
-                execution_status=ExecutionStatus.NOT_RUN,
+                execution_status=execution_status,
                 public_tests_passed=execution_result.public_tests_passed,
                 public_tests_total=execution_result.public_tests_total,
                 hidden_tests_summary=execution_result.hidden_tests_summary,
@@ -140,6 +140,78 @@ class CodeService:
         )
         self._store_exchange(session.session_id, request.code, response.feedback_text)
         return response
+
+    def _execution_issues(self, execution_result: CodeExecutionResult) -> list[CodeIssue]:
+        if execution_result.status == "runtime_error":
+            return [
+                CodeIssue(
+                    code="runtime_error",
+                    message=execution_result.details.get(
+                        "stderr_excerpt",
+                        "Код завершился с ошибкой во время sandbox execution.",
+                    ),
+                    severity=IssueSeverity.ERROR,
+                )
+            ]
+        if execution_result.status == "timeout":
+            return [
+                CodeIssue(
+                    code="execution_timeout",
+                    message="Исполнение было остановлено по timeout.",
+                    severity=IssueSeverity.ERROR,
+                )
+            ]
+        if execution_result.status == "failed_tests":
+            return [
+                CodeIssue(
+                    code="public_tests_failed",
+                    message="Не все публичные тесты пройдены.",
+                    severity=IssueSeverity.WARNING,
+                )
+            ]
+        return []
+
+    @staticmethod
+    def _map_execution_status(execution_result: CodeExecutionResult) -> ExecutionStatus:
+        if not execution_result.runner_available:
+            return ExecutionStatus.NOT_RUN
+        if execution_result.status == "timeout":
+            return ExecutionStatus.BLOCKED
+        return ExecutionStatus.VALIDATED
+
+    @staticmethod
+    def _build_execution_feedback(execution_result: CodeExecutionResult) -> str:
+        if not execution_result.runner_available:
+            return redact_internal_paths(
+                "Синтаксис корректен. На этом этапе выполнена только безопасная статическая проверка; "
+                "sandbox runner недоступен, поэтому код не исполнялся."
+            )
+        if execution_result.status == "validated":
+            if execution_result.public_tests_total > 0:
+                return (
+                    "Код выполнился в sandbox и прошёл публичные тесты. "
+                    "Проверь, что решение остаётся устойчивым на других входах."
+                )
+            return "Код выполнился в sandbox без ошибок."
+        if execution_result.status == "failed_tests":
+            return (
+                "Код выполнился в sandbox, но не прошёл все публичные тесты. "
+                "Проверь обработку крайних случаев и ожидаемый вывод."
+            )
+        if execution_result.status == "runtime_error":
+            stderr_excerpt = execution_result.details.get(
+                "stderr_excerpt",
+                "Произошла ошибка во время исполнения.",
+            )
+            return redact_internal_paths(
+                f"Код выполнился в sandbox, но завершился с ошибкой: {stderr_excerpt}"
+            )
+        if execution_result.status == "timeout":
+            return (
+                "Исполнение было остановлено по timeout. "
+                "Проверь бесконечные циклы и слишком тяжёлые вычисления."
+            )
+        return "Sandbox execution завершилась в неопределённом состоянии."
 
     def _build_response(
         self,
