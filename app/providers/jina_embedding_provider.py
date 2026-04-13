@@ -45,6 +45,8 @@ class JinaEmbeddingProvider(EmbeddingProvider):
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
+                "User-Agent": "RAG-System/1.0",
+                "Accept": "application/json",
             },
             method="POST",
         )
@@ -57,6 +59,12 @@ class JinaEmbeddingProvider(EmbeddingProvider):
                 context=ssl_context,
             ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+                details = exc.read().decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    "Jina embedding request failed. "
+                    f"HTTP {exc.code}. Response body: {details}"
+                ) from exc
         except (error.URLError, ssl.SSLError) as exc:
             raise RuntimeError(
                 "Jina embedding request failed. "

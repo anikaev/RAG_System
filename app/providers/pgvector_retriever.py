@@ -64,31 +64,38 @@ class PgvectorRetrieverBackend(RetrieverBackend):
         with self.db_manager.session_scope() as db:
             self._ensure_ready(db)
             vector_literal = self._to_vector_literal(query_embedding)
-            rows = db.execute(
-                text(
-                    """
-                    SELECT
-                        chunk_id,
-                        content,
-                        metadata_json,
-                        1 - (embedding_vector <=> CAST(:query_embedding AS vector)) AS score
-                    FROM knowledge_chunks
-                    WHERE embedding_vector IS NOT NULL
-                      AND (:subject IS NULL OR subject = :subject)
-                      AND (:topic IS NULL OR topic = :topic)
-                      AND (:task_id IS NULL OR task_id = :task_id)
-                    ORDER BY embedding_vector <=> CAST(:query_embedding AS vector)
-                    LIMIT :top_k
-                    """
-                ),
-                {
-                    "query_embedding": vector_literal,
-                    "subject": subject,
-                    "topic": topic,
-                    "task_id": task_id,
-                    "top_k": top_k,
-                },
-            ).all()
+
+            filters = ["embedding_vector IS NOT NULL"]
+            params: dict[str, Any] = {
+                "query_embedding": vector_literal,
+                "top_k": top_k,
+            }
+
+            if subject is not None:
+                filters.append("subject = :subject")
+                params["subject"] = subject
+
+            if topic is not None:
+                filters.append("topic = :topic")
+                params["topic"] = topic
+
+            if task_id is not None:
+                filters.append("task_id = :task_id")
+                params["task_id"] = task_id
+
+            sql = f"""
+                SELECT
+                    chunk_id,
+                    content,
+                    metadata_json,
+                    1 - (embedding_vector <=> CAST(:query_embedding AS vector)) AS score
+                FROM knowledge_chunks
+                WHERE {' AND '.join(filters)}
+                ORDER BY embedding_vector <=> CAST(:query_embedding AS vector)
+                LIMIT :top_k
+            """
+
+            rows = db.execute(text(sql), params).all()
 
         results = [
             RetrievedContext(
