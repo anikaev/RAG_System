@@ -29,6 +29,19 @@ class SolutionLeakingProvider(LLMProvider):
         )
 
 
+class ConceptExampleProvider(LLMProvider):
+    def generate(self, request: LLMGenerationRequest) -> LLMGenerationResult:
+        return LLMGenerationResult(
+            response_text=(
+                "Цикл for повторяет действие фиксированное число раз.\n"
+                "```python\nfor i in range(3):\n    print(i)\n```"
+            ),
+            guiding_question="Что напечатает этот пример?",
+            confidence=0.78,
+            metadata={"provider": "concept-example"},
+        )
+
+
 def test_llm_service_falls_back_to_template_when_provider_fails():
     service = LLMService(primary_provider=FailingProvider())
 
@@ -46,6 +59,8 @@ def test_llm_service_falls_back_to_template_when_provider_fails():
     assert result.response_text.startswith("Подсказка:")
     assert result.guiding_question == "Какой первый шаг?"
     assert result.metadata["fallback_used"] is True
+    assert result.metadata["fallback_reason"] == "primary_provider_failed"
+    assert result.metadata["primary_provider"] == "FailingProvider"
 
 
 def test_llm_service_redacts_internal_paths():
@@ -87,3 +102,21 @@ def test_llm_service_cuts_off_solution_leak_for_refusal_mode():
     assert "```" not in result.response_text
     assert "не выдаю готовое решение" in result.response_text.lower()
     assert result.metadata["fallback_used"] is True
+    assert result.metadata["fallback_reason"] == "refusal_contains_code"
+
+
+def test_llm_service_allows_short_example_code_for_concept_explainer():
+    service = LLMService(primary_provider=ConceptExampleProvider())
+
+    result = service.generate(
+        LLMGenerationRequest(
+            user_message="Объясни цикл for",
+            mode="concept_explainer",
+            hint_level=0,
+        )
+    )
+
+    assert result.metadata["fallback_used"] is False
+    assert result.metadata["fallback_reason"] is None
+    assert result.metadata["provider"] == "concept-example"
+    assert "```python" in result.response_text

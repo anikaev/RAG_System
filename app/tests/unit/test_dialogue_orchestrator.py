@@ -145,7 +145,7 @@ class TestHintProgression:
             user_id="u1",
             message="Следующую подсказку",
         ))
-        assert r3.hint_level == 3
+        assert r3.hint_level == 2
 
     def test_refusal_does_not_advance_hint_level(self):
         orch = _build_orchestrator()

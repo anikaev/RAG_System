@@ -115,6 +115,16 @@ PLAYGROUND_HTML = """<!doctype html>
       color: var(--warn);
       font-size: 14px;
     }
+    .answer {
+      margin-top: 10px;
+    }
+    .small-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+    }
   </style>
 </head>
 <body>
@@ -162,7 +172,11 @@ PLAYGROUND_HTML = """<!doctype html>
         <button id="send-chat">Отправить в chat/respond</button>
         <div class="panel-wide">
           <div id="chat-summary" class="meta"></div>
+          <div id="chat-diagnostics"></div>
+          <div class="small-title">Ответ</div>
           <pre id="chat-response">Пока пусто.</pre>
+          <div class="small-title">Наводящий вопрос</div>
+          <pre id="chat-guiding-question">-</pre>
         </div>
       </section>
     </div>
@@ -246,8 +260,12 @@ PLAYGROUND_HTML = """<!doctype html>
       const userId = document.getElementById("user-id").value.trim() || "demo-user";
       const summary = document.getElementById("chat-summary");
       const responseBox = document.getElementById("chat-response");
+      const diagnosticsBox = document.getElementById("chat-diagnostics");
+      const guidingQuestionBox = document.getElementById("chat-guiding-question");
       summary.textContent = "Идёт chat/respond...";
       responseBox.textContent = "";
+      diagnosticsBox.innerHTML = "";
+      guidingQuestionBox.textContent = "-";
       try {
         const data = await fetchJson("/v1/chat/respond", {
           method: "POST",
@@ -262,9 +280,21 @@ PLAYGROUND_HTML = """<!doctype html>
         document.getElementById("session-id").value = data.session_id;
         summary.textContent =
           `mode=${data.mode}; hint_level=${data.hint_level}; confidence=${data.confidence}; contexts=${data.used_context_ids.length}`;
-        responseBox.textContent =
-          `${data.response_text}\n\nused_context_ids: ${JSON.stringify(data.used_context_ids, null, 2)}\n` +
-          `guiding_question: ${data.guiding_question || "-"}\nrefusal: ${data.refusal}`;
+        const badges = [
+          `<span class="badge">provider: ${data.llm_provider || "-"}</span>`,
+          `<span class="badge">primary: ${data.llm_primary_provider || "-"}</span>`,
+          `<span class="badge">fallback: ${data.llm_fallback_used}</span>`,
+          `<span class="badge">refusal: ${data.refusal}</span>`,
+        ];
+        if (data.llm_fallback_reason) {
+          badges.push(`<span class="badge">reason: ${data.llm_fallback_reason}</span>`);
+        }
+        if (data.used_context_ids.length > 0) {
+          badges.push(`<span class="badge">contexts: ${data.used_context_ids.join(", ")}</span>`);
+        }
+        diagnosticsBox.innerHTML = badges.join("");
+        responseBox.textContent = data.response_text;
+        guidingQuestionBox.textContent = data.guiding_question || "-";
       } catch (error) {
         summary.textContent = "";
         responseBox.textContent = error.message;

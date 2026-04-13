@@ -119,6 +119,16 @@ class DialogueOrchestrator:
             guiding_question=llm_result.guiding_question or decision.guiding_question,
             used_context_ids=used_context_ids,
             refusal=decision.refusal,
+            llm_provider=self._metadata_str(llm_result.metadata, "provider"),
+            llm_primary_provider=self._metadata_str(
+                llm_result.metadata,
+                "primary_provider",
+            ),
+            llm_fallback_used=bool(llm_result.metadata.get("fallback_used", False)),
+            llm_fallback_reason=self._metadata_str(
+                llm_result.metadata,
+                "fallback_reason",
+            ),
         )
 
     def _retrieve(self, request: ChatRequest) -> list[RetrievedContext]:
@@ -221,3 +231,11 @@ class DialogueOrchestrator:
         if issue_summaries:
             parts.append(f"Проблемы: {issue_summaries}.")
         return " ".join(parts)
+
+    @staticmethod
+    def _metadata_str(metadata: dict[str, object], key: str) -> str | None:
+        value = metadata.get(key)
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None

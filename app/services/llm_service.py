@@ -31,9 +31,19 @@ class LLMService:
         self.fallback_provider = fallback_provider or MockLLMProvider()
 
     def generate(self, request: LLMGenerationRequest) -> LLMGenerationResult:
+        primary_provider_name = self._provider_name(self.primary_provider)
         try:
             result = self.primary_provider.generate(request)
-            return self._post_process(request, result, used_fallback=False)
+            result = self._with_metadata(
+                result,
+                primary_provider=primary_provider_name,
+            )
+            return self._post_process(
+                request,
+                result,
+                used_fallback=False,
+                fallback_reason=None,
+            )
         except Exception as exc:
             logger.warning(
                 "llm.primary_failed",
@@ -44,7 +54,16 @@ class LLMService:
                 },
             )
             fallback_result = self.fallback_provider.generate(request)
-            return self._post_process(request, fallback_result, used_fallback=True)
+            fallback_result = self._with_metadata(
+                fallback_result,
+                primary_provider=primary_provider_name,
+            )
+            return self._post_process(
+                request,
+                fallback_result,
+                used_fallback=True,
+                fallback_reason="primary_provider_failed",
+            )
 
     def _post_process(
         self,
@@ -52,22 +71,30 @@ class LLMService:
         result: LLMGenerationResult,
         *,
         used_fallback: bool,
+        fallback_reason: str | None,
     ) -> LLMGenerationResult:
         sanitized = self._sanitize_result(result)
 
-        if self._violates_policy(request, sanitized.response_text):
+        violation_reason = self._policy_violation_reason(request, sanitized.response_text)
+        if violation_reason is not None:
             logger.warning(
                 "llm.policy_violation_detected",
                 extra={
                     "event": "llm.policy_violation_detected",
                     "mode": request.mode,
+                    "reason": violation_reason,
                 },
             )
-            sanitized = self._safe_fallback_result(request)
+            sanitized = self._safe_fallback_result(
+                request,
+                primary_provider=self._metadata_str(sanitized.metadata, "primary_provider"),
+            )
             used_fallback = True
+            fallback_reason = violation_reason
 
         metadata = dict(sanitized.metadata)
         metadata["fallback_used"] = used_fallback
+        metadata["fallback_reason"] = fallback_reason
         return sanitized.model_copy(update={"metadata": metadata})
 
     @staticmethod
@@ -85,7 +112,12 @@ class LLMService:
             }
         )
 
-    def _safe_fallback_result(self, request: LLMGenerationRequest) -> LLMGenerationResult:
+    def _safe_fallback_result(
+        self,
+        request: LLMGenerationRequest,
+        *,
+        primary_provider: str | None = None,
+    ) -> LLMGenerationResult:
         if request.refusal:
             response_text = build_refusal_message()
             if request.response_template:
@@ -99,30 +131,91 @@ class LLMService:
                 response_text=response_text,
                 guiding_question=request.guiding_question_hint,
                 confidence=request.confidence_hint or 0.96,
-                metadata={"provider": "llm_service", "mode": request.mode},
+                metadata={
+                    "provider": self._provider_name(self.fallback_provider),
+                    "mode": request.mode,
+                    "primary_provider": primary_provider,
+                },
             )
 
         fallback_result = self.fallback_provider.generate(request)
+        fallback_result = self._with_metadata(
+            fallback_result,
+            primary_provider=primary_provider,
+        )
         return self._sanitize_result(fallback_result)
 
     @staticmethod
-    def _violates_policy(request: LLMGenerationRequest, response_text: str) -> bool:
+    def _policy_violation_reason(
+        request: LLMGenerationRequest,
+        response_text: str,
+    ) -> str | None:
+        code_blocks = _CODE_BLOCK_RE.findall(response_text)
+        code_like_lines = len(_CODE_LINE_RE.findall(response_text))
         if request.mode == "code_feedback":
-            return False
+            return None
 
         lowered = response_text.lower()
         if request.refusal:
-            return bool(_CODE_BLOCK_RE.search(response_text) or _CODE_LINE_RE.search(response_text))
+            if code_blocks or code_like_lines > 0:
+                return "refusal_contains_code"
+            return None
 
-        if request.mode in {"hint_only", "clarify", "concept_explainer"}:
-            if _CODE_BLOCK_RE.search(response_text):
-                return True
-            if len(_CODE_LINE_RE.findall(response_text)) >= 3:
-                return True
-            if "готовое решение" in lowered or "готовый код" in lowered:
-                return True
+        if "готовое решение" in lowered or "готовый код" in lowered:
+            return "contains_full_solution_phrase"
 
-        return False
+        if request.mode == "clarify":
+            if code_blocks:
+                return "clarify_contains_code_block"
+            if code_like_lines >= 3:
+                return "clarify_contains_code_like_lines"
+            return None
+
+        if request.mode == "hint_only":
+            if request.hint_level < 4 and code_blocks:
+                return "hint_only_contains_code_block"
+            if code_like_lines >= 5:
+                return "hint_only_contains_too_much_code"
+            return None
+
+        if request.mode == "concept_explainer":
+            if len(code_blocks) > 1:
+                return "concept_explainer_contains_multiple_code_blocks"
+            if len(code_blocks) == 1:
+                code_block = code_blocks[0]
+                if code_block.count("\n") > 6 or len(code_block) > 320:
+                    return "concept_explainer_contains_large_code_block"
+            if code_like_lines >= 8:
+                return "concept_explainer_contains_too_much_code"
+            return None
+
+        return None
+
+    @staticmethod
+    def _metadata_str(metadata: dict[str, object], key: str) -> str | None:
+        value = metadata.get(key)
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _provider_name(provider: LLMProvider) -> str:
+        mapping = {
+            "MockLLMProvider": "mock",
+            "CompatibleAPILLMProvider": "compatible_api",
+        }
+        return mapping.get(type(provider).__name__, type(provider).__name__)
+
+    @staticmethod
+    def _with_metadata(
+        result: LLMGenerationResult,
+        *,
+        primary_provider: str | None,
+    ) -> LLMGenerationResult:
+        metadata = dict(result.metadata)
+        metadata.setdefault("primary_provider", primary_provider)
+        return result.model_copy(update={"metadata": metadata})
 
 
 class _SafeFormatMap(dict[str, str]):

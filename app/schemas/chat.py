@@ -41,3 +41,7 @@ class ChatResponseData(BaseModel):
     guiding_question: str | None = None
     used_context_ids: list[str] = Field(default_factory=list)
     refusal: bool = False
+    llm_provider: str | None = None
+    llm_primary_provider: str | None = None
+    llm_fallback_used: bool = False
+    llm_fallback_reason: str | None = None

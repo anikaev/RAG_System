@@ -27,6 +27,7 @@ from app.schemas.chat import ChatMode
 MIN_HINT_LEVEL = 0
 MAX_HINT_LEVEL = 4
 NEAR_SOLUTION_JUMP_THRESHOLD = 2
+MAX_GENERIC_HINT_LEVEL = 2
 
 
 _MODE_TEMPLATES: dict[str, str] = {
@@ -123,18 +124,39 @@ class HintService:
 
     def _compute_next_hint_level(self, message: str, current: int) -> int:
         if has_near_solution_signal(message):
-            proposed = current + 2
-        elif has_escalation_signal(message) or wants_stronger_hints(message):
+            return self._clamp_near_solution_level(current)
+
+        if has_escalation_signal(message) or wants_stronger_hints(message):
             proposed = current + 1
         else:
             proposed = current + 1
 
-        return self._clamp_level(proposed, current)
+        return self._clamp_generic_hint_level(proposed, current)
 
     def _advance_for_code_feedback(self, message: str, current: int) -> int:
         if has_specific_error_signal(message):
             return self._clamp_level(max(current, 3), current)
         return self._clamp_level(current + 1, current)
+
+    @staticmethod
+    def _clamp_generic_hint_level(proposed: int, current: int) -> int:
+        """Generic task hints must stay broad.
+
+        Level 3 is reserved for a concrete bug, wrong reasoning step, or code issue.
+        If the user still provides only a general request for "more hints", we keep
+        the strongest safe generic hint at level 2 instead of fabricating a fake
+        pinpointed mistake.
+        """
+        if current >= MAX_HINT_LEVEL:
+            return MAX_HINT_LEVEL
+        return min(max(proposed, MIN_HINT_LEVEL), MAX_GENERIC_HINT_LEVEL)
+
+    @staticmethod
+    def _clamp_near_solution_level(current: int) -> int:
+        proposed = current + 2
+        if current < NEAR_SOLUTION_JUMP_THRESHOLD:
+            return MAX_GENERIC_HINT_LEVEL
+        return HintService._clamp_level(proposed, current)
 
     @staticmethod
     def _clamp_level(proposed: int, current: int) -> int:

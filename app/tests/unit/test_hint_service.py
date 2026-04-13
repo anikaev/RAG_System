@@ -126,7 +126,7 @@ class TestHintProgression:
             has_context=True,
         )
         assert decision.mode == ChatMode.HINT_ONLY
-        assert decision.next_hint_level == 3
+        assert decision.next_hint_level == 2
 
     def test_near_solution_signal_increments_by_two(self, svc: HintService):
         decision = svc.evaluate(
@@ -145,13 +145,13 @@ class TestHintProgression:
         )
         assert decision.next_hint_level == MAX_HINT_LEVEL
 
-    def test_never_decreases_level(self, svc: HintService):
+    def test_normalizes_ungrounded_level_3_back_to_level_2(self, svc: HintService):
         decision = svc.evaluate(
-            message="Привет, расскажи о массивах",
+            message="Следующую подсказку по задаче 27",
             current_hint_level=3,
             has_context=True,
         )
-        assert decision.next_hint_level >= 3
+        assert decision.next_hint_level == 2
 
 
 class TestNoJumpToLevel4FromLow:

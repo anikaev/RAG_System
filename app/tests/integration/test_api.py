@@ -81,6 +81,8 @@ def test_chat_endpoint_returns_contextual_hint(client):
     assert payload["data"]["used_context_ids"]
     assert payload["data"]["session_id"]
     assert payload["data"]["confidence"] >= 0.5
+    assert payload["data"]["llm_provider"] is not None
+    assert "llm_fallback_used" in payload["data"]
 
 
 def test_chat_endpoint_refuses_full_solution_requests(client):
