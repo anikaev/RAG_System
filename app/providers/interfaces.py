@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,7 +66,12 @@ class LLMProvider(Protocol):
 
 @runtime_checkable
 class EmbeddingProvider(Protocol):
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(
+        self,
+        texts: list[str],
+        *,
+        input_type: EmbeddingInputType = "document",
+    ) -> list[list[float]]:
         ...
 
 
@@ -88,3 +93,5 @@ class RetrieverBackend(Protocol):
 class CodeExecutionBackend(Protocol):
     def execute(self, request: CodeExecutionRequest) -> CodeExecutionResult:
         ...
+EmbeddingInputType = Literal["document", "query"]
+

@@ -9,6 +9,7 @@ from app.providers.database_retriever import DatabaseLexicalRetriever
 from app.providers.docker_code_runner import DockerCodeExecutionBackend
 from app.providers.fallback_retriever import FallbackRetriever
 from app.providers.interfaces import CodeExecutionBackend, EmbeddingProvider, LLMProvider, RetrieverBackend
+from app.providers.jina_embedding_provider import JinaEmbeddingProvider
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
 from app.providers.pgvector_retriever import PgvectorRetrieverBackend
@@ -32,7 +33,9 @@ def build_llm_provider(settings: Settings) -> LLMProvider:
 
 def build_embedding_provider(settings: Settings) -> EmbeddingProvider:
     if settings.embedding_provider_mode == "mock":
-        return MockEmbeddingProvider()
+        return MockEmbeddingProvider(dimensions=settings.pgvector_dimensions)
+    if settings.embedding_provider_mode == "jina":
+        return JinaEmbeddingProvider(settings)
     raise ValueError(
         f"Unsupported embedding_provider_mode: {settings.embedding_provider_mode}"
     )

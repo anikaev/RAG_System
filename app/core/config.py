@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_prefix="RAG_",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "RAG Tutor API"
@@ -33,16 +34,29 @@ class Settings(BaseSettings):
     database_echo: bool = False
     seed_demo_data_on_startup: bool = True
     llm_provider_mode: Literal["mock", "compatible_api"] = "mock"
-    embedding_provider_mode: Literal["mock"] = "mock"
-    retriever_backend_mode: Literal["fallback", "pgvector"] = "fallback"
+    embedding_provider_mode: Literal["mock", "jina"] = "mock"
+    retriever_backend_mode: Literal["fallback", "pgvector"] = "pgvector"
     retriever_fallback_to_lexical: bool = True
     retrieval_cache_backend_mode: Literal["auto", "disabled", "redis"] = "auto"
     retrieval_cache_ttl_seconds: int = 120
     code_execution_backend_mode: Literal["stub", "docker"] = "stub"
-    llm_api_key: str | None = None
+    llm_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("RAG_LLM_API_KEY", "HF_TOKEN"),
+    )
     llm_api_base_url: str | None = "http://127.0.0.1:8001/v1"
     llm_model_name: str = "local-model"
     llm_api_timeout_seconds: int = 30
+    llm_response_format_mode: Literal["json_object", "json_schema"] = "json_object"
+    embedding_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("RAG_EMBEDDING_API_KEY", "JINA_API_KEY"),
+    )
+    embedding_api_url: str = "https://api.jina.ai/v1/embeddings"
+    embedding_model_name: str = "jina-embeddings-v3"
+    embedding_api_timeout_seconds: int = 30
+    embedding_ssl_verify: bool = True
+    embedding_ca_bundle_path: Path | None = None
 
     runner_timeout_seconds: int = 2
     runner_cpu_limit: float = 0.5
@@ -57,7 +71,7 @@ class Settings(BaseSettings):
     kb_seed_path: Path = Field(default=PROJECT_ROOT / "app" / "kb" / "seed")
     kb_chunk_size_chars: int = 320
     kb_chunk_overlap_paragraphs: int = 1
-    pgvector_dimensions: int = 8
+    pgvector_dimensions: int = 1024
 
     blocked_code_patterns: tuple[str, ...] = (
         "import os",

@@ -4,17 +4,24 @@ from typing import cast
 
 from fastapi import APIRouter, Request
 
+from app.api.dependencies import get_services, get_settings
+from app.core.config import Settings
 from app.core.metrics import MetricsRegistry
 from app.core.request_context import get_request_id
 from app.schemas.common import ApiResponse, HealthResponseData, MetricsResponseData, success_response
+from app.services.container import ServiceContainer
+from app.services.runtime_diagnostics import build_runtime_summary
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health", response_model=ApiResponse[HealthResponseData])
 async def healthcheck(request: Request) -> ApiResponse[HealthResponseData]:
+    settings = get_settings(request)
+    services = get_services(request)
+    runtime_summary = build_runtime_summary(settings=settings, services=services)
     return success_response(
-        data=HealthResponseData(status="ok"),
+        data=HealthResponseData(status="ok", **runtime_summary),
         request_id=get_request_id(request),
     )
 

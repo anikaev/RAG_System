@@ -17,7 +17,7 @@ def test_mock_embedding_provider_is_deterministic():
 
     assert first == second
     assert first != third
-    assert len(first) == 8
+    assert len(first) == 1024
 
 
 def test_mock_llm_provider_returns_structured_response():

@@ -32,7 +32,10 @@ def seed_knowledge_chunks(
     imported = 0
     embeddings: Sequence[list[float] | None]
     if embedding_provider is not None and prepared_chunks:
-        embeddings = embedding_provider.embed([chunk.content for chunk in prepared_chunks])
+        embeddings = embedding_provider.embed(
+            [chunk.content for chunk in prepared_chunks],
+            input_type="document",
+        )
     else:
         embeddings = [None] * len(prepared_chunks)
 

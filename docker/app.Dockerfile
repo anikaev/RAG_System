@@ -6,16 +6,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends docker.io \
+    && apt-get install -y --no-install-recommends python3-setuptools python3-wheel \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir --upgrade pip
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md alembic.ini ./
 COPY app ./app
 COPY cli ./cli
 
-RUN python -m pip install --no-cache-dir -e .
+RUN python -m pip install --no-cache-dir --no-build-isolation -e .
 
 EXPOSE 8000
 

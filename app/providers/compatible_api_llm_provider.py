@@ -35,7 +35,7 @@ class CompatibleAPILLMProvider(LLMProvider):
                     },
                 ],
                 "temperature": 0.2,
-                "response_format": {"type": "json_object"},
+                "response_format": self._build_response_format(),
             }
         ).encode("utf-8")
         headers = {
@@ -96,6 +96,36 @@ class CompatibleAPILLMProvider(LLMProvider):
         if request_payload.refusal:
             parts.append("Do not provide a full solution, final code, or final answer.")
         return "\n".join(parts)
+
+    def _build_response_format(self) -> dict[str, Any]:
+        if self.settings.llm_response_format_mode == "json_schema":
+            return {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "rag_tutor_response",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "response_text": {"type": "string"},
+                            "guiding_question": {
+                                "type": ["string", "null"],
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "minimum": 0.0,
+                                "maximum": 1.0,
+                            },
+                        },
+                        "required": [
+                            "response_text",
+                            "guiding_question",
+                            "confidence",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        return {"type": "json_object"}
 
     @staticmethod
     def _build_input(request_payload: LLMGenerationRequest) -> str:

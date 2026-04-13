@@ -56,7 +56,10 @@ class PgvectorRetrieverBackend(RetrieverBackend):
         if cached is not None:
             return cached
 
-        query_embedding = self.embedding_provider.embed([query])[0]
+        query_embedding = self.embedding_provider.embed(
+            [query],
+            input_type="query",
+        )[0]
 
         with self.db_manager.session_scope() as db:
             self._ensure_ready(db)

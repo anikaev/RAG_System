@@ -13,6 +13,7 @@ from app.providers.interfaces import (
     CodeExecutionBackend,
     CodeExecutionRequest,
     CodeExecutionResult,
+    EmbeddingInputType,
     EmbeddingProvider,
     LLMGenerationRequest,
     LLMGenerationResult,
@@ -20,6 +21,7 @@ from app.providers.interfaces import (
     RetrievedContext,
     RetrieverBackend,
 )
+from app.providers.jina_embedding_provider import JinaEmbeddingProvider
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
 from app.providers.pgvector_retriever import PgvectorBackendUnavailable, PgvectorRetrieverBackend
@@ -31,7 +33,9 @@ __all__ = [
     "DatabaseLexicalRetriever",
     "CodeExecutionRequest",
     "CodeExecutionResult",
+    "EmbeddingInputType",
     "EmbeddingProvider",
+    "JinaEmbeddingProvider",
     "LLMGenerationRequest",
     "LLMGenerationResult",
     "LLMProvider",

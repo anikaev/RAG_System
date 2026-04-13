@@ -12,6 +12,12 @@ def test_healthcheck_returns_enveloped_success(client):
     payload = response.json()
     assert payload["ok"] is True
     assert payload["data"]["status"] == "ok"
+    assert payload["data"]["retriever_backend"] in {
+        "fallback",
+        "database_lexical",
+        "pgvector",
+    }
+    assert payload["data"]["embedding_provider"] in {"mock", "jina"}
     assert "request_id" in payload["meta"]
     assert "X-Request-ID" in response.headers
 
@@ -24,6 +30,39 @@ def test_openapi_is_available(client):
     assert payload["info"]["title"] == "RAG Tutor API"
     assert "/v1/chat/respond" in payload["paths"]
     assert "/metrics" in payload["paths"]
+    assert "/v1/retrieval/debug" in payload["paths"]
+
+
+def test_playground_page_is_available(client):
+    response = client.get("/playground")
+
+    assert response.status_code == 200
+    assert "RAG Playground" in response.text
+
+
+def test_retrieval_debug_endpoint_returns_contexts(client):
+    response = client.post(
+        "/v1/retrieval/debug",
+        json={
+            "query": "Объясни, как работает цикл for в Python",
+            "task_context": {
+                "subject": "informatics",
+            },
+            "top_k": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["backend"] in {
+        "fallback",
+        "database_lexical",
+        "pgvector",
+    }
+    assert payload["data"]["context_count"] >= 1
+    assert payload["data"]["contexts"][0]["chunk_id"]
+    assert payload["data"]["contexts"][0]["content"]
 
 
 def test_chat_endpoint_returns_contextual_hint(client):
@@ -276,7 +315,7 @@ def test_seed_knowledge_chunks_include_mock_embeddings(db_client, db_manager):
 
     assert knowledge_chunks
     assert knowledge_chunks[0].embedding_json is not None
-    assert len(knowledge_chunks[0].embedding_json) == 8
+    assert len(knowledge_chunks[0].embedding_json) == 1024
 
 
 def test_database_chat_retrieval_uses_seeded_knowledge_chunks(db_client):

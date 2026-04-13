@@ -37,6 +37,16 @@ class HealthResponseData(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: str = "ok"
+    session_backend: str | None = None
+    retriever_backend: str | None = None
+    retriever_ready: bool | None = None
+    retriever_status: str | None = None
+    embedding_provider: str | None = None
+    llm_provider: str | None = None
+    code_execution_backend: str | None = None
+    configured_session_backend: str | None = None
+    configured_retriever_backend: str | None = None
+    configured_embedding_provider: str | None = None
 
 
 class MetricsResponseData(BaseModel):

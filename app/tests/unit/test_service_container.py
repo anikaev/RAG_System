@@ -7,6 +7,7 @@ from app.providers.compatible_api_llm_provider import CompatibleAPILLMProvider
 from app.providers.database_retriever import DatabaseLexicalRetriever
 from app.providers.docker_code_runner import DockerCodeExecutionBackend
 from app.providers.fallback_retriever import FallbackRetriever
+from app.providers.jina_embedding_provider import JinaEmbeddingProvider
 from app.providers.mock_embedding_provider import MockEmbeddingProvider
 from app.providers.mock_llm_provider import MockLLMProvider
 from app.providers.stub_code_runner import LocalStubCodeRunner
@@ -39,6 +40,19 @@ def test_service_container_supports_compatible_api_provider_mode():
     container = build_service_container(settings)
 
     assert isinstance(container.llm_provider, CompatibleAPILLMProvider)
+
+
+def test_service_container_supports_jina_embedding_provider_mode():
+    settings = Settings(
+        session_backend="memory",
+        embedding_provider_mode="jina",
+        embedding_api_key="jina_test_key",
+        seed_demo_data_on_startup=False,
+    )
+
+    container = build_service_container(settings)
+
+    assert isinstance(container.embedding_provider, JinaEmbeddingProvider)
 
 
 def test_service_container_supports_docker_code_runner_mode():
