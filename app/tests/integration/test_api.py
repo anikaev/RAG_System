@@ -38,7 +38,16 @@ def test_playground_page_is_available(client):
     response = client.get("/playground")
 
     assert response.status_code == 200
-    assert "RAG Playground" in response.text
+    assert "RAG Tutor Demo UI" in response.text
+    assert "Code Check" in response.text
+    assert "Knowledge Base Studio" in response.text
+
+
+def test_root_redirects_to_playground(client):
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/playground"
 
 
 def test_retrieval_debug_endpoint_returns_contexts(client):

@@ -15,6 +15,7 @@ def client() -> TestClient:
     settings = Settings(
         session_backend="memory",
         seed_demo_data_on_startup=False,
+        retrieval_cache_backend_mode="disabled",
     )
     with TestClient(create_app(settings)) as test_client:
         yield test_client
@@ -33,6 +34,7 @@ def db_settings(sqlite_db_url: str) -> Settings:
         database_fallback_to_memory=False,
         database_bootstrap_schema=True,
         seed_demo_data_on_startup=True,
+        retrieval_cache_backend_mode="disabled",
     )
 
 
