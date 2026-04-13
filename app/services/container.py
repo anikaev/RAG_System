@@ -17,6 +17,7 @@ from app.providers.interfaces import CodeExecutionBackend, EmbeddingProvider, LL
 from app.services.chat_service import ChatService
 from app.services.code_service import CodeService
 from app.services.hint_service import HintService
+from app.services.knowledge_ingestion_service import KnowledgeIngestionService
 from app.services.llm_service import LLMService
 from app.services.session_store import DatabaseSessionStore, InMemorySessionStore, SessionStore
 
@@ -34,6 +35,7 @@ class ServiceContainer:
     llm_service: LLMService
     chat_service: ChatService
     code_service: CodeService
+    knowledge_ingestion_service: KnowledgeIngestionService | None = None
     db_manager: DatabaseSessionManager | None = None
 
 
@@ -54,6 +56,16 @@ def build_service_container(
 
     hint_service = HintService()
     llm_service = LLMService(primary_provider=llm_provider)
+    knowledge_ingestion_service = (
+        KnowledgeIngestionService(
+            db_manager=db_manager,
+            embedding_provider=embedding_provider,
+            chunk_size_chars=settings.kb_chunk_size_chars,
+            overlap_paragraphs=settings.kb_chunk_overlap_paragraphs,
+        )
+        if db_manager is not None
+        else None
+    )
     code_service = CodeService(
         settings=settings,
         session_store=session_store,
@@ -77,6 +89,7 @@ def build_service_container(
             code_service=code_service,
         ),
         code_service=code_service,
+        knowledge_ingestion_service=knowledge_ingestion_service,
         db_manager=db_manager,
     )
 

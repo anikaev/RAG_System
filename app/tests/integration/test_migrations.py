@@ -20,4 +20,9 @@ def test_alembic_upgrade_creates_core_tables(tmp_path: Path):
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
 
-    assert {"chat_sessions", "chat_messages", "knowledge_chunks"} <= tables
+    assert {
+        "chat_sessions",
+        "chat_messages",
+        "knowledge_chunks",
+        "knowledge_documents",
+    } <= tables
