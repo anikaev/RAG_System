@@ -1,0 +1,15 @@
+.env
+.idea
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+.DS_Store
+.venv/
+*.pyc
+*.egg-info/
+PROMPT_FOR_CODEX.md
+TASKS_FOR_CODEX.md
+plan_rag_ege_informatics.md
+.graphify*
+graphify-out/*
+graphify-out
